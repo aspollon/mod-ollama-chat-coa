@@ -3,6 +3,21 @@
 </p>
 
 
+# mod-ollama-chat-coa
+
+**mod-ollama-chat for Conquest of Azeroth and AFK Realm.** This is [mod-ollama-chat](https://github.com/DustinHendrickson/mod-ollama-chat) by Dustin Hendrickson, made to build and run on the [Conquest of Azeroth](https://github.com/Conquest-of-AzerothCore/azerothcore-wotlk-coa) core with [Zyth45's Playerbots](https://github.com/Zyth45/mod-playerbots/tree/coa), and installed and set up by [AFK Realm](https://github.com/aspollon/AFK-Realm). Like the original, it is free software under the GNU Affero General Public License v3 (see `LICENSE`); the original's copyright stays with its author.
+
+What is different from the original:
+
+- It builds on the Conquest of Azeroth core (whose sessions name a headless bot `IsHeadlessBot()`).
+- The module is called `mod-ollama-chat-coa`: put it into `modules/mod-ollama-chat-coa` (its loader is `Addmod_ollama_chat_coaScripts`). Its configuration file and database tables keep the original's names (`mod_ollama_chat.conf`, `mod_ollama_chat_*`).
+- `afk-realm.json`: AFK Realm turns off the bots' own chatter of mod-playerbots that would talk over the module (the settings listed below).
+- Planned: the world as Conquest of Azeroth has it (its classes, the zones and levels of mod-world-journey, the custom races of CoA Custom) and roleplaying personalities that fit each bot's race and class.
+
+The rest of this file is the original's documentation; where it says `mod-ollama-chat`, the folder is `mod-ollama-chat-coa` here.
+
+---
+
 # AzerothCore + Playerbots Module: mod-ollama-chat
 
 

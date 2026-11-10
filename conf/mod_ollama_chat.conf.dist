@@ -1019,10 +1019,10 @@ OllamaChat.EnableRAG = 0
 # OllamaChat.RAGDataPath
 #     Description: Path to the directory containing RAG JSON data files.
 #                  This should be a relative path from the server's working directory.
-#                  For AzerothCore installations, this is typically ../../../modules/mod-ollama-chat/data/rag/
+#                  For AzerothCore installations, this is typically ../../../modules/mod-ollama-chat-coa/data/rag/
 #                  The system will load all .json files from this directory.
-#     Default:     ../../../modules/mod-ollama-chat/data/rag/
-OllamaChat.RAGDataPath = ../../../modules/mod-ollama-chat/data/rag/
+#     Default:     ../../../modules/mod-ollama-chat-coa/data/rag/
+OllamaChat.RAGDataPath = ../../../modules/mod-ollama-chat-coa/data/rag/
 
 
 

@@ -7,7 +7,7 @@
 #include "mod-ollama-chat_rag.h"
 #include "Log.h"
 
-void Addmod_ollama_chatScripts()
+void Addmod_ollama_chat_coaScripts()
 {
     LOG_INFO("server.loading", "[Ollama Chat] Registering mod-ollama-chat scripts.");
     new OllamaChatConfigWorldScript();

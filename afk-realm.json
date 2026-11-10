@@ -1,0 +1,41 @@
+{
+  "about": "Read by AFK Realm (https://github.com/aspollon/AFK-Realm) when it installs the module: it switches off the prewritten chatter of mod-playerbots, which would talk over the language model. Without AFK Realm, set these in playerbots.conf yourself (see README.md).",
+  "settings": [
+    {
+      "file": "playerbots.conf",
+      "key": "AiPlayerbot.EnableBroadcasts",
+      "value": "0",
+      "why": "The bots' reports of loot, quests and kills would talk over the language model's chat."
+    },
+    {
+      "file": "playerbots.conf",
+      "key": "AiPlayerbot.RandomBotTalk",
+      "value": "0",
+      "why": "The bots' prewritten random talk in say, yell and the general channels; the language model talks instead."
+    },
+    {
+      "file": "playerbots.conf",
+      "key": "AiPlayerbot.RandomBotEmote",
+      "value": "0",
+      "why": "The bots' random emotes; the module plays emotes that fit what a bot says."
+    },
+    {
+      "file": "playerbots.conf",
+      "key": "AiPlayerbot.RandomBotSuggestDungeons",
+      "value": "0",
+      "why": "The bots' prewritten dungeon suggestions in the channels."
+    },
+    {
+      "file": "playerbots.conf",
+      "key": "AiPlayerbot.EnableGreet",
+      "value": "0",
+      "why": "The bots' prewritten greeting when they are invited."
+    },
+    {
+      "file": "playerbots.conf",
+      "key": "AiPlayerbot.RandomBotSayWithoutMaster",
+      "value": "0",
+      "why": "Bots without a master talking on their own with prewritten lines."
+    }
+  ]
+}
