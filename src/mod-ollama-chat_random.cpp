@@ -1,5 +1,6 @@
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_coa.h"
+#include "mod-ollama-chat_lore.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
@@ -198,6 +199,7 @@ namespace
         prompt += std::string(person->GetName()) + ", a " + Coa_RaceName(person->getRace()) + " " +
                   botAI->GetChatHelper()->FormatClass(person->getClass()) + ", is near you. ";
         prompt += GetSentimentPromptAddition(bot, person);
+        prompt += Lore_BuildSection(bot, person, std::string());
         prompt += Memory_BuildPromptSection(bot, person);
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += " Speak to " + std::string(person->GetName()) + " first, by name, the way someone in your situation "
@@ -264,6 +266,7 @@ namespace
         }
 
         prompt += " " + OllamaDescribeSituation(bot, nullptr);
+        prompt += Lore_BuildSection(bot, nullptr, environmentInfo);
         prompt += Memory_BuildPromptSection(bot, nullptr);
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += Expression_BuildGesturePrompt();

@@ -190,6 +190,8 @@ float    g_TopicPlayerRadius        = 40.0f;
 uint32_t g_RandomChatterQuestionChance = 35;
 uint32_t g_ApproachChance = 40;
 uint32_t g_ApproachCooldownMinutes = 15;
+bool     g_LoreEnable = true;
+uint32_t g_LoreMaxTopics = 2;
 
 std::vector<std::string> g_EnvCommentNearbyPlayer;
 std::vector<std::string> g_EnvCommentGroupMember;
@@ -830,6 +832,8 @@ void LoadOllamaChatConfig()
     g_RandomChatterQuestionChance     = sConfigMgr->GetOption<uint32_t>("OllamaChat.RandomChatterQuestionChance", 35);
     g_ApproachChance                  = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Approach.Chance", 40));
     g_ApproachCooldownMinutes         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Approach.CooldownMinutes", 15);
+    g_LoreEnable                      = sConfigMgr->GetOption<bool>("OllamaChat.Lore.Enable", true);
+    g_LoreMaxTopics                   = std::min<uint32_t>(4, sConfigMgr->GetOption<uint32_t>("OllamaChat.Lore.MaxTopics", 2));
 
     // --- Snapshot limits -------------------------------------------------
     g_SnapshotIncludeSpells           = sConfigMgr->GetOption<bool>("OllamaChat.Snapshot.IncludeSpells", false);

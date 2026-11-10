@@ -216,8 +216,12 @@ OllamaChat.RepeatPenalty = 1.1
 #                  0 = model default. Use a value only if you want to restrict or expand context.
 #                  Example for Llama-3 8B: 8192. For 70B: 8192/32768.
 #     Example:     OllamaChat.NumCtx = 4096
-#     Default:     0
-OllamaChat.NumCtx = 0
+#                  Conquest of Azeroth: a reply prompt carries the bot's voice, temperament, situation, knowledge,
+#                  memory and the conversation so far, more than the 2048 or 4096 tokens many models default to.
+#                  When it is cut, the model loses the beginning - its instructions - first. 8192 is enough and
+#                  costs about one more gigabyte of graphics memory for an 8B model.
+#     Default:     8192
+OllamaChat.NumCtx = 8192
 
 # OllamaChat.NumThreads
 #     Description: Maximum number of threads the model should use to compute the request.
@@ -1428,6 +1432,21 @@ OllamaChat.Approach.Chance = 40
 #     Description: A bot speaks to the same person first at most once in this many minutes.
 #     Default:     15
 OllamaChat.Approach.CooldownMinutes = 15
+
+# OllamaChat.Lore.Enable
+#     Description: Conquest of Azeroth. Bots know the world: the story of their own people, the order or tradition
+#                  of their class, the zone they stand in, something of the people of whoever they talk to, and how
+#                  far along the road from the old world to Outland and Northrend they are (with mod-world-journey,
+#                  its ranges; in words, never in levels). Persons, places, peoples, orders and events named in a
+#                  message ("Arthas", "Gilneas", "the Scourge") bring up what the bot knows about them. The
+#                  knowledge is built into the module; it needs no files and no RAG.
+#     Default:     1
+OllamaChat.Lore.Enable = 1
+
+# OllamaChat.Lore.MaxTopics
+#     Description: How many things named in a message the bot recalls at once (0 to 4).
+#     Default:     2
+OllamaChat.Lore.MaxTopics = 2
 
 ###############################################################################
 #

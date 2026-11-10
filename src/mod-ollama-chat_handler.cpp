@@ -1,5 +1,6 @@
 ﻿#include "Log.h"
 #include "mod-ollama-chat_coa.h"
+#include "mod-ollama-chat_lore.h"
 #include "Language.h"
 #include "Player.h"
 #include "Chat.h"
@@ -2199,6 +2200,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // Where the bot is and what it is doing, so it can talk from inside its own day.
     prompt += " " + OllamaDescribeSituation(bot, player);
+
+    // What the bot knows: its people, its calling, this place, and whatever the message names.
+    prompt += Lore_BuildSection(bot, player, playerMessage);
 
     // Add RAG information to the prompt if available
     if (!ragInfo.empty()) {

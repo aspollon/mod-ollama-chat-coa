@@ -18,7 +18,9 @@ What is different from the original:
 - Bots speak to people first: when a bot's turn to talk comes while a person stands near it, it may speak to them by name (`OllamaChat.Approach.Chance`, `OllamaChat.Approach.CooldownMinutes`); the person answers without naming it.
 - Actions written into a reply (`*grins wickedly* Well met.`) become an emote line in the third person ("Klausdieter grins wickedly.") before the spoken words.
 - Answers that repeat the prompt or the bot's last line are asked for again.
-- Planned: the zones and levels of mod-world-journey and a Conquest of Azeroth knowledge base.
+- Bots know the world, built into the module (no files, no RAG): the story of every CoA and CoA Custom people, the order or tradition of every CoA class, every zone of the old world, Outland and Northrend with its capitals, and the persons, orders and events of the time of the Lich King. A bot knows its own people, calling and place, something of the people of whoever it talks to, and what a message names ("Arthas", "Gilneas", "the Scourge"). With mod-world-journey it knows how far along the road to Outland and Northrend it is, in words, never in levels (`OllamaChat.Lore.Enable`, `OllamaChat.Lore.MaxTopics`). The tables are in `src/mod-ollama-chat_lore_data.cpp`.
+- `OllamaChat.NumCtx = 8192`: room for all of that; with a model's short default the instructions at the start of the prompt were cut off.
+- The original's RAG files (`data/rag`, World of Warcraft as players talk about it) stay switched off.
 
 The rest of this file is the original's documentation; where it says `mod-ollama-chat`, the folder is `mod-ollama-chat-coa` here.
 

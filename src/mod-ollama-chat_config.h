@@ -243,6 +243,10 @@ extern uint32_t g_RandomChatterQuestionChance;
 extern uint32_t g_ApproachChance;
 extern uint32_t g_ApproachCooldownMinutes;
 
+// Conquest of Azeroth: what the bots know of the world (mod-ollama-chat_lore.cpp).
+extern bool     g_LoreEnable;
+extern uint32_t g_LoreMaxTopics;
+
 extern std::vector<std::string> g_EnvCommentNearbyPlayer;
 extern std::vector<std::string> g_EnvCommentGroupMember;
 extern std::vector<std::string> g_EnvCommentGuildMemberOnline;

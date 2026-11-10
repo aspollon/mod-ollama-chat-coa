@@ -198,6 +198,12 @@
       "key": "FishingLife.ChatMaxSeconds",
       "value": "86400",
       "why": "The prewritten lines of the Immersion anglers come at most once a day; the language model talks for them."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.NumCtx",
+      "value": "8192",
+      "why": "Room for the bot's voice, knowledge, memory and the conversation: with the model's short default the beginning of the prompt, its instructions, was cut off."
     }
   ]
 }
