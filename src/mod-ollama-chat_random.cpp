@@ -20,6 +20,9 @@
 #include "Map.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "CellImpl.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 
 #include "AiFactory.h"
 #include "PlayerbotAI.h"
@@ -28,6 +31,7 @@
 #include <fmt/core.h>
 
 #include <ctime>
+#include <list>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -130,6 +134,79 @@ namespace
         return true;
     }
 
+    // When each bot last spoke to each person first ("bot:player" -> time).
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, time_t>> g_lastApproach;
+
+    // A person near the bot it could speak to first: real, awake, in say range, of a people whose speech it
+    // understands, not busy with another bot and not approached by this bot lately. nullptr when there is none.
+    Player* FindPersonToApproach(Player* bot, time_t now)
+    {
+        if (g_ApproachChance == 0 || g_DisableForSayYell || !bot->IsInWorld())
+            return nullptr;
+
+        std::list<Player*> around;
+        Acore::AnyPlayerInObjectRangeCheck inRange(bot, g_SayDistance, true, true);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(bot, around, inRange);
+        Cell::VisitObjects(bot, searcher, g_SayDistance);
+
+        Player* best = nullptr;
+        float bestDistance = 0.0f;
+        for (Player* p : around)
+        {
+            if (!p || p == bot || !OllamaIsRealPlayer(p) || !p->IsAlive() || p->IsInCombat())
+                continue;
+            if (Roleplay_IsLanguageBarrier(p, bot))
+                continue;
+            const ObjectGuid partner = Governor_GetPartner(p->GetGUID());
+            if (partner && partner != bot->GetGUID())
+                continue;   // talking with someone else; do not butt in
+            auto botIt = g_lastApproach.find(bot->GetGUID().GetRawValue());
+            if (botIt != g_lastApproach.end())
+            {
+                auto it = botIt->second.find(p->GetGUID().GetRawValue());
+                if (it != botIt->second.end() && difftime(now, it->second) < double(g_ApproachCooldownMinutes) * 60.0)
+                    continue;
+            }
+            const float d = bot->GetDistance(p);
+            if (!best || d < bestDistance)
+            {
+                best = p;
+                bestDistance = d;
+            }
+        }
+        return best;
+    }
+
+    std::string BuildApproachPrompt(Player* bot, Player* person)
+    {
+        PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+        if (!botAI || !botAI->GetChatHelper())
+            return "";
+
+        AreaTableEntry const* area = botAI->GetCurrentArea();
+        AreaTableEntry const* zone = botAI->GetCurrentZone();
+        const std::string personality = GetBotPersonality(bot);
+
+        std::string prompt = "You are " + std::string(bot->GetName()) + ", a level " + std::to_string(bot->GetLevel()) +
+            " " + Coa_RaceName(bot->getRace()) + " " + botAI->GetChatHelper()->FormatClass(bot->getClass()) +
+            " (" + (bot->getGender() == 0 ? "male" : "female") + ") of the " +
+            (bot->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde") + ", in " +
+            (area ? PlayerbotAI::GetLocalizedAreaName(area) : std::string("the wilds")) + ", " +
+            (zone ? PlayerbotAI::GetLocalizedAreaName(zone) : std::string("")) + ". Your temperament: " +
+            GetPersonalityPromptAddition(personality) + " " + OllamaDescribeSituation(bot, person) + " ";
+
+        prompt += std::string(person->GetName()) + ", a " + Coa_RaceName(person->getRace()) + " " +
+                  botAI->GetChatHelper()->FormatClass(person->getClass()) + ", is near you. ";
+        prompt += GetSentimentPromptAddition(bot, person);
+        prompt += Memory_BuildPromptSection(bot, person);
+        prompt += Roleplay_BuildVoicePrompt(bot);
+        prompt += " Speak to " + std::string(person->GetName()) + " first, by name, the way someone in your situation "
+                  "would: a question, a request for help, a warning, an offer, a remark about what you are doing or "
+                  "about them. If you know them, take up what you know. One or two short sentences; if you do "
+                  "something while speaking, put it first between asterisks, in the third person, without your name.";
+        return prompt;
+    }
+
     std::string BuildRandomChatterPrompt(Player* bot, const std::string& environmentInfo)
     {
         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
@@ -186,6 +263,7 @@ namespace
             prompt += " " + questions[PickIndex(questions.size())];
         }
 
+        prompt += " " + OllamaDescribeSituation(bot, nullptr);
         prompt += Memory_BuildPromptSection(bot, nullptr);
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += Expression_BuildGesturePrompt();
@@ -332,6 +410,44 @@ void OllamaBotRandomChatter::HandleRandomChatter()
         {
             reschedule();
             continue;
+        }
+
+        // A person standing near: now and then the bot speaks to them by name instead of to the room, and the
+        // conversation can go on from there without the person having to name it.
+        if (urand(0, 99) < g_ApproachChance)
+        {
+            if (Player* person = FindPersonToApproach(bot, now))
+            {
+                const std::string scopeKey = Governor_MakeScopeKey(
+                    ChatChannelSourceLocalStr[SRC_SAY_LOCAL], 0, std::string(), 0, bot->GetZoneId());
+                std::string prompt = Governor_CanSend(bot->GetGUID(), scopeKey) ? BuildApproachPrompt(bot, person)
+                                                                                 : std::string();
+                if (!prompt.empty())
+                {
+                    OllamaChatRequest request;
+                    request.botGuid       = rawGuid;
+                    request.targetGuid    = person->GetGUID().GetRawValue();
+                    request.source        = SRC_SAY_LOCAL;
+                    request.chainDepth    = 0;
+                    request.scopeKey      = scopeKey;
+                    request.prompt        = std::move(prompt);
+                    request.botName       = bot->GetName();
+                    request.originMessage = "(you spoke to them first)";
+                    request.recordHistory = true;
+                    request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1) ? OllamaRequestKind::RoleplayReply
+                                                                                   : OllamaRequestKind::RandomChatter;
+                    request.triggerBotReplies = false;
+                    if (OllamaDispatch_Submit(std::move(request)))
+                    {
+                        g_lastApproach[rawGuid][person->GetGUID().GetRawValue()] = now;
+                        if (g_DebugEnabled)
+                            LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} speaks to {} first.",
+                                     bot->GetName(), person->GetName());
+                    }
+                    reschedule();
+                    continue;
+                }
+            }
         }
 
         // Pick what to talk about. Weighted toward the people and the world

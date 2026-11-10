@@ -69,32 +69,8 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player,
 // direct address, which the governor needs to know.
 static size_t OllamaFindBotNameMention(const std::string& msg, const std::string& botName)
 {
-    if (botName.empty() || msg.size() < botName.size())
-        return std::string::npos;
-
-    auto lower = [](const std::string& in)
-    {
-        std::string out = in;
-        for (char& c : out)
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        return out;
-    };
-
-    const std::string lowerMsg     = lower(msg);
-    const std::string lowerBotName = lower(botName);
-
-    size_t pos = 0;
-    while ((pos = lowerMsg.find(lowerBotName, pos)) != std::string::npos)
-    {
-        const bool validStart = (pos == 0 || !std::isalnum(static_cast<unsigned char>(lowerMsg[pos - 1])));
-        const size_t endPos   = pos + lowerBotName.length();
-        const bool validEnd   = (endPos >= lowerMsg.length() || !std::isalnum(static_cast<unsigned char>(lowerMsg[endPos])));
-
-        if (validStart && validEnd)
-            return pos;
-        ++pos;
-    }
-    return std::string::npos;
+    // Whole name, a beginning of it, the name in two words or with a typo (Conquest of Azeroth edition).
+    return Coa_FindName(msg, botName);
 }
 
 // Is this line aimed at this bot in particular, rather than said to the room?
@@ -1098,6 +1074,10 @@ std::string GenerateBotGameStateSnapshot(Player* bot)
 // that is the name of someone online. Names are capitalised the way the game stores them. nullptr when nobody is named.
 static Player* OllamaFindNamedOther(const std::string& message, Player* sender)
 {
+    if (!sender)
+        return nullptr;
+
+    // Exactly as the game stores it, anywhere in the world.
     std::string word;
     auto check = [&](std::string const& w) -> Player*
     {
@@ -1121,9 +1101,54 @@ static Player* OllamaFindNamedOther(const std::string& message, Player* sender)
             word.clear();
         }
     }
-    return check(word);
+    if (Player* p = check(word))
+        return p;
+
+    // The way people type names ("klaus", "klaus dieter"), among the people in sight.
+    if (!sender->IsInWorld())
+        return nullptr;
+    std::list<Player*> around;
+    Acore::AnyPlayerInObjectRangeCheck inRange(sender, 100.0f, false, true);
+    Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(sender, around, inRange);
+    Cell::VisitObjects(sender, searcher, 100.0f);
+    for (Player* p : around)
+        if (p && p != sender && Coa_FindName(message, p->GetName()) != std::string::npos)
+            return p;
+    return nullptr;
 }
 
+// The bot a person is speaking to without naming it: the one they have targeted, else the one they are in a
+// conversation with (it answered them last, or they turned to it, within ConversationWindowSeconds). Only for a
+// person's own lines; whispers have their own path.
+static Player* OllamaFindFocusBot(Player* player, const std::vector<Player*>& candidates,
+                                  ChatChannelSourceLocal source, bool senderIsBot)
+{
+    if (!player || senderIsBot || source == SRC_WHISPER_LOCAL)
+        return nullptr;
+
+    auto usable = [&](Player* bot) -> bool
+    {
+        if (!bot || (g_DisableRepliesInCombat && bot->IsInCombat()))
+            return false;
+        if ((source == SRC_SAY_LOCAL || source == SRC_YELL_LOCAL) && Roleplay_IsLanguageBarrier(player, bot))
+            return false;
+        return true;
+    };
+
+    const ObjectGuid target = player->GetTarget();
+    if (target)
+        for (Player* bot : candidates)
+            if (bot && bot->GetGUID() == target && usable(bot))
+                return bot;
+
+    const ObjectGuid partner = Governor_GetPartner(player->GetGUID());
+    if (partner)
+        for (Player* bot : candidates)
+            if (bot && bot->GetGUID() == partner && usable(bot))
+                return bot;
+
+    return nullptr;
+}
 
 void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth)
 {
@@ -1653,6 +1678,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             if (!(g_DisableRepliesInCombat && chosen->IsInCombat()))
             {
                 finalCandidates.push_back(chosen);
+                if (!senderIsBot)
+                    Governor_SetPartner(player->GetGUID(), chosen->GetGUID());
                 if(g_DebugEnabled)
                 {
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} selected (mentioned first at position {})", 
@@ -1667,6 +1694,16 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat", "[Ollama Chat] Message names {}, who is not a candidate here; no other bot answers.",
                          named->GetName());
+        }
+        else if (Player* focus = OllamaFindFocusBot(player, candidateBots, sourceLocal, senderIsBot))
+        {
+            // A person who targets a bot, or who is talking with one, is speaking to it: it answers, alone, without
+            // being named every time.
+            finalCandidates.push_back(focus);
+            Governor_SetPartner(player->GetGUID(), focus->GetGUID());
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} answers: {} is talking to it (target or conversation).",
+                         focus->GetName(), player->GetName());
         }
         else
         {
@@ -1710,6 +1747,13 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                 {
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} FAILED chance roll ({} >= {}%{})", bot->GetName(), roll, botChance, botIsAddressed ? ", addressed" : "");
                 }
+            }
+
+            // A person saying something to nobody in particular gets one answer, not a chorus.
+            if (!senderIsBot && finalCandidates.size() > 1)
+            {
+                Player* one = finalCandidates[urand(0, static_cast<uint32>(finalCandidates.size() - 1))];
+                finalCandidates.assign(1, one);
             }
         }
     }
@@ -1939,6 +1983,108 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
     }
 }
 
+// What the bot is doing right now and where, in a few plain sentences.
+std::string OllamaDescribeSituation(Player* bot, Player* player)
+{
+    std::vector<std::string> parts;
+
+    // The time of day of the realm.
+    {
+        time_t now = time(nullptr);
+        tm local{};
+#ifdef _WIN32
+        localtime_s(&local, &now);
+#else
+        localtime_r(&now, &local);
+#endif
+        const int h = local.tm_hour;
+        parts.push_back(h < 5 ? "It is deep in the night." : h < 11 ? "It is morning." : h < 14 ? "It is midday."
+                        : h < 18 ? "It is afternoon." : h < 22 ? "It is evening." : "It is night.");
+    }
+
+    if (Map* map = bot->GetMap())
+    {
+        if (map->IsBattlegroundOrArena())
+            parts.push_back(std::string("You are fighting in ") + map->GetMapName() + ".");
+        else if (map->IsDungeon())
+            parts.push_back(std::string("You are inside ") + map->GetMapName() + ".");
+    }
+
+    if (!bot->IsAlive())
+        parts.push_back("You have just died and are a spirit on the way back to your body.");
+    else if (bot->IsInCombat())
+    {
+        Unit* foe = bot->GetVictim();
+        parts.push_back(foe ? "You are in the middle of a fight with " + std::string(foe->GetName()) + "."
+                            : std::string("You are in the middle of a fight."));
+    }
+    else if (bot->IsInFlight())
+        parts.push_back("You are on a flight between two towns.");
+    else if (bot->IsMounted())
+        parts.push_back("You are on your mount, on your way somewhere.");
+    else if (bot->IsInWater())
+        parts.push_back("You are swimming.");
+    else if (bot->IsSitState())
+        parts.push_back("You are sitting down, taking a rest.");
+    else if (bot->HasPlayerFlag(PLAYER_FLAGS_RESTING))
+        parts.push_back("You are resting in a town or an inn.");
+
+    if (bot->IsAlive() && bot->GetHealthPct() < 35.0f)
+        parts.push_back("You are badly wounded.");
+
+    if (Group* group = bot->GetGroup())
+    {
+        std::string names;
+        int n = 0;
+        for (GroupReference* ref = group->GetFirstMember(); ref && n < 4; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == bot)
+                continue;
+            names += (names.empty() ? "" : ", ") + member->GetName();
+            ++n;
+        }
+        if (!names.empty())
+            parts.push_back("You travel with " + names + ".");
+    }
+
+    // What the bot is out to do: up to two of its open quests.
+    {
+        std::string open;
+        int n = 0;
+        for (auto const& [questId, status] : bot->getQuestStatusMap())
+        {
+            if (status.Status != QUEST_STATUS_INCOMPLETE)
+                continue;
+            Quest const* quest = sObjectMgr->GetQuestTemplate(questId);
+            if (!quest)
+                continue;
+            open += (open.empty() ? "" : "; ") + quest->GetTitle();
+            if (++n == 2)
+                break;
+        }
+        if (!open.empty())
+            parts.push_back("Your current tasks: " + open + ".");
+    }
+
+    if (player && player != bot && player->IsInWorld() && bot->IsInWorld() && player->GetMapId() == bot->GetMapId())
+    {
+        const float d = player->GetDistance(bot);
+        std::string who = player->GetName();
+        if (d < 6.0f)
+            parts.push_back(who + " is standing right in front of you.");
+        else if (d < 30.0f)
+            parts.push_back(who + " is a few steps away from you.");
+        if (player->GetTarget() == bot->GetGUID())
+            parts.push_back(who + " is looking at you.");
+    }
+
+    std::string out = "Right now: ";
+    for (size_t i = 0; i < parts.size(); ++i)
+        out += (i ? " " : "") + parts[i];
+    return out;
+}
+
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player)
 {  
     if (!bot || !player) {
@@ -2047,9 +2193,12 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("player_name", playerName),
         fmt::arg("player_message", playerMessage),
         fmt::arg("extra_info", extraInfo),
-        fmt::arg("chat_history", chatHistory),
+        fmt::arg("chat_history", std::string()),
         fmt::arg("sentiment_info", sentimentInfo)
     );
+
+    // Where the bot is and what it is doing, so it can talk from inside its own day.
+    prompt += " " + OllamaDescribeSituation(bot, player);
 
     // Add RAG information to the prompt if available
     if (!ragInfo.empty()) {
@@ -2071,6 +2220,19 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text.
     prompt += Expression_BuildGesturePrompt();
+    prompt += " If you do something while you speak, put it first between asterisks, in the third person and without "
+              "your name, the way an emote reads: *grins wickedly* or *looks at the scorch marks on her sleeve*. "
+              "Never describe the other person's looks or feelings for them.";
+
+    // The conversation so far and the new line come last: small models answer what they read last, and a message
+    // buried in the middle of the prompt is how a conversation loses its thread.
+    if (!chatHistory.empty())
+        prompt += "\n" + chatHistory;
+    else
+        prompt += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
+                                    fmt::arg("player_message", playerMessage));
+    prompt += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation: react to what was just "
+              "said and to what was said before, keep to the topic, and do not greet again if you are already talking.";
 
     // Debug logging for full prompt including RAG information
     if (g_DebugEnabled && g_DebugShowFullPrompt) {

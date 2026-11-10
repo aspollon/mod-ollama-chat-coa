@@ -12,6 +12,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
+#include <algorithm>
 #include <fmt/core.h>
 #include <sstream>
 #include <fstream>
@@ -187,6 +188,8 @@ uint32_t g_TopicEventMemorySize     = 6;
 uint32_t g_TopicEventMemorySeconds  = 300;
 float    g_TopicPlayerRadius        = 40.0f;
 uint32_t g_RandomChatterQuestionChance = 35;
+uint32_t g_ApproachChance = 40;
+uint32_t g_ApproachCooldownMinutes = 15;
 
 std::vector<std::string> g_EnvCommentNearbyPlayer;
 std::vector<std::string> g_EnvCommentGroupMember;
@@ -825,6 +828,8 @@ void LoadOllamaChatConfig()
     g_TopicEventMemorySeconds         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Topic.EventMemorySeconds", 300);
     g_TopicPlayerRadius               = sConfigMgr->GetOption<float>("OllamaChat.Topic.PlayerRadius", 40.0f);
     g_RandomChatterQuestionChance     = sConfigMgr->GetOption<uint32_t>("OllamaChat.RandomChatterQuestionChance", 35);
+    g_ApproachChance                  = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Approach.Chance", 40));
+    g_ApproachCooldownMinutes         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Approach.CooldownMinutes", 15);
 
     // --- Snapshot limits -------------------------------------------------
     g_SnapshotIncludeSpells           = sConfigMgr->GetOption<bool>("OllamaChat.Snapshot.IncludeSpells", false);

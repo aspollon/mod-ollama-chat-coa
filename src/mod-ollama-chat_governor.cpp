@@ -9,6 +9,7 @@
 #include <deque>
 #include <iterator>
 #include <mutex>
+#include <unordered_map>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -302,6 +303,38 @@ uint32_t Governor_ApplyChainDecay(uint32_t baseChancePct, uint8_t depth)
 // addressee is a real person: an open conversation bypasses pacing, and
 // letting bots open one with each other is how a bot-to-bot loop escapes
 // every brake in this file.
+// Who each person is talking to right now (player guid -> bot guid, since when). One bot at a time: whoever answered
+// last, or whoever the person turned to by name or by targeting it. Without this every bot that ever answered the
+// person counted as "in conversation" with them, and all of them answered the next line together.
+namespace
+{
+    std::unordered_map<uint64_t, std::pair<uint64_t, Clock::time_point>> g_partners;
+}
+
+void Governor_SetPartner(ObjectGuid playerGuid, ObjectGuid botGuid)
+{
+    if (!playerGuid || !botGuid)
+        return;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_partners[playerGuid.GetRawValue()] = { botGuid.GetRawValue(), Clock::now() };
+}
+
+ObjectGuid Governor_GetPartner(ObjectGuid playerGuid)
+{
+    if (!playerGuid || g_ConversationWindowSeconds == 0)
+        return ObjectGuid::Empty;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_partners.find(playerGuid.GetRawValue());
+    if (it == g_partners.end())
+        return ObjectGuid::Empty;
+    if (SecondsSince(it->second.second, Clock::now()) > double(g_ConversationWindowSeconds))
+    {
+        g_partners.erase(it);
+        return ObjectGuid::Empty;
+    }
+    return ObjectGuid(it->second.first);
+}
+
 void Governor_NoteConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
                                const std::string& scopeKey)
 {
@@ -310,6 +343,7 @@ void Governor_NoteConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
 
     std::lock_guard<std::mutex> lock(g_mutex);
     g_bots[botGuid.GetRawValue()].conversations[playerGuid.GetRawValue()][scopeKey] = Clock::now();
+    g_partners[playerGuid.GetRawValue()] = { botGuid.GetRawValue(), Clock::now() };
 }
 
 bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
@@ -319,6 +353,11 @@ bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
         return false;
 
     std::lock_guard<std::mutex> lock(g_mutex);
+
+    // Only the bot the person is talking to now: having answered them once does not make every bot a partner.
+    auto partner = g_partners.find(playerGuid.GetRawValue());
+    if (partner == g_partners.end() || partner->second.first != botGuid.GetRawValue())
+        return false;
 
     auto botIt = g_bots.find(botGuid.GetRawValue());
     if (botIt == g_bots.end())

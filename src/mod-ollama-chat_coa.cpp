@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -406,4 +407,267 @@ bool Coa_LooksLikeEcho(const std::string& reply, const std::string& prompt)
             return true;
     }
     return false;
+}
+
+// ---------------------------------------------------------------------------
+// Names as people type them
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    bool IsWordByte(unsigned char c)
+    {
+        return std::isalnum(c) || (c & 0x80);
+    }
+
+    // Common words of four letters or more that start many names; they never count as a name.
+    bool IsCommonWord(const std::string& w)
+    {
+        static const std::unordered_set<std::string> words = {
+            "there", "then", "than", "that", "this", "these", "those", "what", "when", "where", "which", "while",
+            "with", "without", "from", "have", "having", "here", "hello", "help", "home", "hold", "into", "just",
+            "know", "like", "look", "make", "many", "more", "most", "much", "must", "need", "never", "nice", "only",
+            "over", "same", "some", "such", "sure", "take", "tell", "thank", "thanks", "them", "they", "think",
+            "very", "want", "well", "were", "will", "with", "your", "yours", "about", "after", "again", "also",
+            "back", "been", "before", "being", "best", "both", "come", "could", "does", "done", "down", "each",
+            "even", "ever", "every", "find", "first", "give", "good", "great", "going", "into", "last", "long",
+            "maybe", "might", "mine", "next", "once", "other", "please", "really", "right", "should", "since",
+            "still", "thing", "things", "time", "today", "under", "until", "upon", "whats", "would", "yeah", "hail",
+            "greetings", "friend", "friends", "anyone", "everyone", "someone", "something", "nothing", "sorry",
+            "aber", "alle", "alles", "also", "auch", "bitte", "dann", "danke", "dass", "deine", "denn", "dich",
+            "dies", "diese", "doch", "eine", "einen", "einer", "etwas", "euch", "gerade", "gibt", "habe", "haben",
+            "hallo", "heute", "hier", "immer", "jetzt", "kann", "keine", "komm", "machst", "mach", "mein", "meine",
+            "mich", "nach", "nicht", "noch", "oder", "schon", "sehr", "sein", "seine", "sind", "unser", "warum",
+            "was", "weil", "wenn", "wer", "wie", "wieder", "willst", "wird", "wohin", "woher", "wollt", "will",
+        };
+        return words.count(w) != 0;
+    }
+
+    // At most one edit (change, insert, delete, or two letters swapped) apart?
+    bool OneEditApart(const std::string& a, const std::string& b)
+    {
+        if (a == b)
+            return true;
+        const size_t la = a.size(), lb = b.size();
+        if (la + 1 < lb || lb + 1 < la)
+            return false;
+        if (la == lb)
+        {
+            std::vector<size_t> diff;
+            for (size_t i = 0; i < la && diff.size() < 3; ++i)
+                if (a[i] != b[i])
+                    diff.push_back(i);
+            if (diff.size() == 1)
+                return true;
+            return diff.size() == 2 && diff[1] == diff[0] + 1 && a[diff[0]] == b[diff[1]] && a[diff[1]] == b[diff[0]];
+        }
+        const std::string& s = la < lb ? a : b;
+        const std::string& l = la < lb ? b : a;
+        size_t i = 0, j = 0;
+        bool skipped = false;
+        while (i < s.size() && j < l.size())
+        {
+            if (s[i] == l[j]) { ++i; ++j; continue; }
+            if (skipped)
+                return false;
+            skipped = true;
+            ++j;
+        }
+        return true;
+    }
+}
+
+size_t Coa_FindName(const std::string& message, const std::string& name)
+{
+    const std::string n = Lower(name);
+    if (n.empty())
+        return std::string::npos;
+
+    std::vector<std::pair<size_t, std::string>> words;
+    for (size_t i = 0; i < message.size();)
+    {
+        if (!IsWordByte(static_cast<unsigned char>(message[i]))) { ++i; continue; }
+        size_t start = i;
+        while (i < message.size() && IsWordByte(static_cast<unsigned char>(message[i])))
+            ++i;
+        words.emplace_back(start, Lower(message.substr(start, i - start)));
+    }
+
+    for (size_t k = 0; k < words.size(); ++k)
+    {
+        const std::string& w = words[k].second;
+        if (w == n)
+            return words[k].first;
+        if (IsCommonWord(w))
+            continue;
+        // "klaus dieter" for Klausdieter
+        if (k + 1 < words.size() && w + words[k + 1].second == n)
+            return words[k].first;
+        // "klaus" for Klausdieter
+        if (w.size() >= 4 && n.size() > w.size() && n.compare(0, w.size(), w) == 0)
+            return words[k].first;
+        // "Klaudieter", "Klausdeiter"
+        if (w.size() >= 5 && n.size() >= 5 && OneEditApart(w, n))
+            return words[k].first;
+    }
+    return std::string::npos;
+}
+
+// ---------------------------------------------------------------------------
+// Actions written into a reply
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    std::string TrimCopy(const std::string& v)
+    {
+        size_t a = v.find_first_not_of(" \t\r\n");
+        if (a == std::string::npos)
+            return "";
+        size_t b = v.find_last_not_of(" \t\r\n");
+        return v.substr(a, b - a + 1);
+    }
+
+    bool StartsWithWordCI(const std::string& text, const std::string& word)
+    {
+        if (text.size() < word.size())
+            return false;
+        if (Lower(text.substr(0, word.size())) != Lower(word))
+            return false;
+        return text.size() == word.size() || !IsWordByte(static_cast<unsigned char>(text[word.size()]));
+    }
+
+    // "Klaus grins", "He grins", "I grin", "Ich grinse" -> "grins"/"grinst": the game puts the name in front itself.
+    std::string ThirdPerson(std::string action, const std::string& botName)
+    {
+        action = TrimCopy(action);
+        for (const std::string& lead : { botName, std::string("he"), std::string("she"), std::string("er"),
+                                          std::string("sie"), std::string("they") })
+        {
+            if (!lead.empty() && StartsWithWordCI(action, lead))
+            {
+                action = TrimCopy(action.substr(lead.size()));
+                break;
+            }
+        }
+        if (StartsWithWordCI(action, "I"))
+        {
+            // English: "I grin at you" -> "grins at you"
+            action = TrimCopy(action.substr(1));
+            size_t end = action.find(' ');
+            std::string verb = action.substr(0, end);
+            std::string rest = end == std::string::npos ? "" : action.substr(end);
+            if (Lower(verb) == "am") verb = "is";
+            else if (Lower(verb) == "have") verb = "has";
+            else if (!verb.empty() && verb.back() != 's')
+            {
+                const char last = verb.back();
+                if (verb.size() > 1 && (last == 'h' || last == 'x' || last == 'o')) verb += "es";
+                else if (verb.size() > 1 && last == 'y' && !strchr("aeiou", verb[verb.size() - 2])) verb = verb.substr(0, verb.size() - 1) + "ies";
+                else verb += "s";
+            }
+            // "my staff" -> "their staff": the emote is read about the bot, not by it.
+            std::string swapped;
+            for (size_t i = 0; i < rest.size();)
+            {
+                if (!IsWordByte(static_cast<unsigned char>(rest[i]))) { swapped += rest[i++]; continue; }
+                size_t j = i;
+                while (j < rest.size() && IsWordByte(static_cast<unsigned char>(rest[j])))
+                    ++j;
+                std::string w = rest.substr(i, j - i);
+                const std::string lw = Lower(w);
+                swapped += lw == "my" ? "their" : lw == "me" ? "them" : lw == "myself" ? "themselves"
+                         : lw == "mine" ? "theirs" : w;
+                i = j;
+            }
+            action = verb + swapped;
+        }
+        else if (StartsWithWordCI(action, "ich"))
+        {
+            // German: "Ich grinse dich an" -> "grinst dich an"
+            action = TrimCopy(action.substr(3));
+            size_t end = action.find(' ');
+            std::string verb = action.substr(0, end);
+            std::string rest = end == std::string::npos ? "" : action.substr(end);
+            if (Lower(verb) == "bin") verb = "ist";
+            else if (Lower(verb) == "habe") verb = "hat";
+            else if (verb.size() > 2 && verb.back() == 'e') verb = verb.substr(0, verb.size() - 1) + "t";
+            action = verb + rest;
+        }
+        // "You look singed" written as an action is how the model narrates for the reader; as an emote it reads
+        // "<Name> looks at you ...". Leave anything else as it is.
+        while (!action.empty() && (action.back() == '.' || action.back() == ' '))
+            action.pop_back();
+        if (!action.empty())
+        {
+            unsigned char c = static_cast<unsigned char>(action[0]);
+            if (c < 0x80)
+                action[0] = static_cast<char>(std::tolower(c));
+            action += ".";
+        }
+        return action;
+    }
+}
+
+std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
+{
+    // A reasoning block from a thinking model is never an action.
+    for (size_t open; (open = reply.find("<think>")) != std::string::npos;)
+    {
+        size_t close = reply.find("</think>", open);
+        reply.erase(open, close == std::string::npos ? std::string::npos : close + 8 - open);
+    }
+
+    std::string actions;
+    auto take = [&](size_t start, size_t end, size_t innerStart, size_t innerEnd) -> bool
+    {
+        std::string inner = TrimCopy(reply.substr(innerStart, innerEnd - innerStart));
+        // A single word stays: "*waves*" is a game emote with an animation, and "*really*" is emphasis.
+        if (inner.find(' ') == std::string::npos)
+            return false;
+        std::string third = ThirdPerson(inner, botName);
+        if (third.empty())
+            return false;
+        if (!actions.empty())
+            actions += " ";
+        actions += third;
+        reply.erase(start, end - start);
+        return true;
+    };
+
+    // Actions stand at the start or the end of a reply ("*grins* Well met." / "Well met. *bows deeply*"). An
+    // asterisk span in the middle of a sentence is emphasis and is left for the cleanup.
+    for (int guard = 0; guard < 4; ++guard)
+    {
+        std::string t = TrimCopy(reply);
+        if (t != reply)
+            reply = t;
+        if (reply.empty())
+            break;
+
+        bool took = false;
+        const char opener = reply[0];
+        if (opener == '*' || opener == '(' || opener == '_')
+        {
+            const char closer = opener == '(' ? ')' : opener;
+            size_t close = reply.find(closer, 1);
+            if (close != std::string::npos)
+                took = take(0, close + 1, 1, close);
+        }
+        if (!took && reply.size() > 2)
+        {
+            const char last = reply.back();
+            if (last == '*' || last == ')' || last == '_')
+            {
+                const char open = last == ')' ? '(' : last;
+                size_t start = reply.rfind(open, reply.size() - 2);
+                if (start != std::string::npos)
+                    took = take(start, reply.size(), start + 1, reply.size() - 1);
+            }
+        }
+        if (!took)
+            break;
+    }
+    reply = TrimCopy(reply);
+    return actions;
 }

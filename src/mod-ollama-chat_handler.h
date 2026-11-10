@@ -42,6 +42,9 @@ void AppendBotConversation(uint64_t botGuid, uint64_t playerGuid,
 
 // Prompt builders. World thread only -- they read live world state.
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player);
+
+// "Right now: It is evening. You are on your mount ..." -- where the bot is and what it is doing.
+std::string OllamaDescribeSituation(Player* bot, Player* player);
 std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textEmote);
 
 // Bounded, distance-sorted snapshot helpers used by the prompt builders and

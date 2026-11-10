@@ -63,6 +63,7 @@ namespace
     {
         OllamaChatRequest request;
         std::string       text;
+        std::string       action;   // an emote line in the third person, sent before the words
         uint32_t          emoteId = 0;
         Clock::time_point deliverAt;
     };
@@ -104,8 +105,9 @@ namespace
     std::unordered_map<uint64_t, std::string> g_lastDirect;
 
     // One generation and its cleanup; "" when nothing usable came back.
-    std::string Generate(const Task& task, const std::string& prompt, uint32_t& emoteId)
+    std::string Generate(const Task& task, const std::string& prompt, uint32_t& emoteId, std::string& action)
     {
+        action.clear();
         OllamaApiResult api = QueryOllama(prompt, task.request.kind);
 
         if (!api.ok)
@@ -114,7 +116,17 @@ namespace
             return "";
         }
 
-        std::string text = ProcessLlmResponse(api.text, task.request.botName, &emoteId);
+        // "*grins wickedly* Well met." -- the action becomes an emote line, the rest is spoken.
+        std::string raw = api.text;
+        action = Coa_TakeActionEmote(raw, task.request.botName);
+        if (!action.empty())
+        {
+            action = Roleplay_FilterMetaTerms(action);
+            if (Coa_LooksLikeEcho(action, prompt))
+                action.clear();
+        }
+
+        std::string text = raw.empty() ? std::string() : ProcessLlmResponse(raw, task.request.botName, &emoteId);
 
         // Roleplay mode rejects lines carrying out-of-world vocabulary rather
         // than mangling the sentence around the offending word.
@@ -144,7 +156,8 @@ namespace
     void RunChatTask(const Task& task)
     {
         uint32_t emoteId = 0;
-        std::string text = Generate(task, task.request.prompt, emoteId);
+        std::string action;
+        std::string text = Generate(task, task.request.prompt, emoteId, action);
 
         // Someone spoke to this bot directly: an echo is asked again once, and so is an answer that is nearly the
         // same as the last thing the bot said to someone (small models copy their own last line out of the chat
@@ -159,7 +172,7 @@ namespace
                     last = it->second;
             }
             bool repeated = !text.empty() && !last.empty() && Governor_Similarity(text, last) >= 0.8f;
-            if (text.empty() || repeated)
+            if ((text.empty() && action.empty()) || repeated)
             {
                 if (g_DebugEnabled && repeated)
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} repeated itself ('{}'); asking once more.",
@@ -167,10 +180,12 @@ namespace
                 std::string again = task.request.prompt +
                     " Answer with only the words you say, and say something new: do not repeat anything you said before.";
                 uint32_t emote2 = 0;
-                std::string second = Generate(task, again, emote2);
-                if (!second.empty() && (last.empty() || Governor_Similarity(second, last) < 0.8f))
+                std::string action2;
+                std::string second = Generate(task, again, emote2, action2);
+                if ((!second.empty() || !action2.empty()) && (second.empty() || last.empty() || Governor_Similarity(second, last) < 0.8f))
                 {
                     text = std::move(second);
+                    action = std::move(action2);
                     emoteId = emote2;
                 }
                 else if (repeated)
@@ -183,7 +198,7 @@ namespace
             }
         }
 
-        if (text.empty())
+        if (text.empty() && action.empty())
         {
             ++g_droppedEmpty;
             if (g_DebugEnabled)
@@ -196,6 +211,7 @@ namespace
         Completion completion;
         completion.request = task.request;
         completion.text    = std::move(text);
+        completion.action  = std::move(action);
         completion.emoteId = emoteId;
 
         uint32_t delayMs = 0;
@@ -383,8 +399,20 @@ namespace
         }
     }
 
-    void Deliver(const Completion& c, const OllamaWorldSnapshot& world)
+    void Deliver(const Completion& delivered, const OllamaWorldSnapshot& world)
     {
+        Completion c = delivered;
+
+        // Where the reply carried an action, it goes out as an emote line ("Klaus grins wickedly.") in say and yell,
+        // where the people around see it. Party, guild, channels and whispers have no emote line, so there the
+        // action stays in front of the words between asterisks.
+        const bool local = c.request.source == SRC_SAY_LOCAL || c.request.source == SRC_YELL_LOCAL;
+        if (!c.action.empty() && !local)
+        {
+            c.text = "*" + c.action + "*" + (c.text.empty() ? "" : " " + c.text);
+            c.action.clear();
+        }
+
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())
             return;
@@ -407,7 +435,7 @@ namespace
         // the same answer is correct -- suppressing it leaves the asker
         // staring at silence, which reads as the bot being broken rather than
         // as anti-repetition working.
-        if (!directAddress && Governor_IsRepetitive(botGuid, c.request.scopeKey, c.text))
+        if (!directAddress && !c.text.empty() && Governor_IsRepetitive(botGuid, c.request.scopeKey, c.text))
         {
             ++g_droppedGovernor;
             if (g_DebugEnabled)
@@ -428,7 +456,15 @@ namespace
         }
 
         Channel* channel = nullptr;
-        if (!RouteMessage(bot, botAI, c, world, channel))
+        bool sent = false;
+        if (!c.action.empty() && !g_DisableForSayYell && AnyoneInRange(bot, g_SayDistance))
+        {
+            bot->TextEmote(c.action);
+            sent = true;
+        }
+        if (!c.text.empty())
+            sent = RouteMessage(bot, botAI, c, world, channel) || sent;
+        if (!sent)
         {
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat",
@@ -437,7 +473,12 @@ namespace
             return;
         }
 
-        Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
+        // What the bot did and said, for its memory of the conversation.
+        const std::string remembered = c.action.empty() ? c.text
+                                     : "*" + c.action + "*" + (c.text.empty() ? "" : " " + c.text);
+
+        if (!c.text.empty())
+            Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
         ++g_totalDelivered;
 
         // This bot is now in a conversation with whoever it just answered, so
@@ -460,14 +501,14 @@ namespace
         if (c.request.recordHistory && c.request.targetGuid)
         {
             AppendBotConversation(c.request.botGuid, c.request.targetGuid,
-                                  c.request.originMessage, c.text);
+                                  c.request.originMessage, remembered);
 
             // Counts name mentions and, past a threshold, queues a
             // condensation or relationship revision. World thread.
             Player* target = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
             Memory_NoteExchange(c.request.botGuid, c.request.targetGuid,
                                 target ? target->GetName() : std::string(),
-                                c.request.originMessage, c.text);
+                                c.request.originMessage, remembered);
         }
 
         if (c.request.updateSentiment && c.request.targetGuid &&
@@ -480,11 +521,11 @@ namespace
         if (g_DebugEnabled)
             LOG_INFO("module.ollamachat", "[Ollama Chat] {} ({}, depth {}): {}",
                      bot->GetName(), ChatChannelSourceLocalStr[c.request.source],
-                     c.request.chainDepth, c.text);
+                     c.request.chainDepth, remembered);
 
         // Let other bots hear it -- with the chain depth advanced, which is
         // what stops the reply loop that had no brakes before.
-        if (c.request.triggerBotReplies &&
+        if (c.request.triggerBotReplies && !c.text.empty() &&
             c.request.source != SRC_WHISPER_LOCAL)
         {
             ProcessBotChatMessage(bot, c.text, c.request.source, channel,

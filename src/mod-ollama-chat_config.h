@@ -238,6 +238,11 @@ extern uint32_t g_TopicEventMemorySeconds;
 extern float    g_TopicPlayerRadius;
 extern uint32_t g_RandomChatterQuestionChance;
 
+// Conquest of Azeroth: a bot whose turn to talk comes while a person stands near it speaks to that person by name, at
+// this chance (percent), at most once per person every ApproachCooldown minutes.
+extern uint32_t g_ApproachChance;
+extern uint32_t g_ApproachCooldownMinutes;
+
 extern std::vector<std::string> g_EnvCommentNearbyPlayer;
 extern std::vector<std::string> g_EnvCommentGroupMember;
 extern std::vector<std::string> g_EnvCommentGuildMemberOnline;

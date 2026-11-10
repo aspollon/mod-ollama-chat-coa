@@ -11,8 +11,14 @@ What is different from the original:
 
 - It builds on the Conquest of Azeroth core (whose sessions name a headless bot `IsHeadlessBot()`).
 - The module is called `mod-ollama-chat-coa`: put it into `modules/mod-ollama-chat-coa` (its loader is `Addmod_ollama_chat_coaScripts`). Its configuration file and database tables keep the original's names (`mod_ollama_chat.conf`, `mod_ollama_chat_*`).
-- `afk-realm.json`: AFK Realm turns off the bots' own chatter of mod-playerbots that would talk over the module (the settings listed below).
-- Planned: the world as Conquest of Azeroth has it (its classes, the zones and levels of mod-world-journey, the custom races of CoA Custom) and roleplaying personalities that fit each bot's race and class.
+- `afk-realm.json`: AFK Realm turns off the prewritten chatter that would talk over the module: the bots' own lines of mod-playerbots, the chatter of mod-playerbots-auctions, and the lines of the Immersion residents (legendaries, beggars, buyers, anglers) and of its PvP bots. The Trade channel is left to trade.
+- Every CoA and CoA Custom race and every CoA class has a voice (how it speaks, what it cares about); race and class names come from the server's own tables. Every bot gets a temperament of its own.
+- Conversations: a person who targets a bot, or who is talking with one, is answered by that bot alone, without naming it every time. Names count the way people type them (`klaus` or `klaus dieter` for Klausdieter, one typo). A line said to nobody in particular gets one answer, not a chorus. The conversation so far (the last ten exchanges) and the new line come last in the prompt, so the bot keeps the thread.
+- Bots know what they are doing: the time of day, a fight, a flight, riding, resting, the dungeon they are in, their companions and open quests, and how close the person is.
+- Bots speak to people first: when a bot's turn to talk comes while a person stands near it, it may speak to them by name (`OllamaChat.Approach.Chance`, `OllamaChat.Approach.CooldownMinutes`); the person answers without naming it.
+- Actions written into a reply (`*grins wickedly* Well met.`) become an emote line in the third person ("Klausdieter grins wickedly.") before the spoken words.
+- Answers that repeat the prompt or the bot's last line are asked for again.
+- Planned: the zones and levels of mod-world-journey and a Conquest of Azeroth knowledge base.
 
 The rest of this file is the original's documentation; where it says `mod-ollama-chat`, the folder is `mod-ollama-chat-coa` here.
 

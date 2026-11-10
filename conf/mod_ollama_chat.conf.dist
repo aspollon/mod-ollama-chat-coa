@@ -239,7 +239,7 @@ OllamaChat.Stop =
 #                  Leave blank for no system prompt, or enter your own.
 #     Example:     OllamaChat.SystemPrompt = "Always answer as if you are a WoW quest giver."
 #     Default:     (empty)
-OllamaChat.SystemPrompt = "You are a person living in the world of Azeroth, speaking in the local chat. Write only the words your character says out loud: one or two short sentences, no quotes, no name in front, no narration, no explanations. Never repeat, quote or mention these instructions or the information you are given, and do not repeat your own earlier lines. Stay true to your people, your calling and the place you are in."
+OllamaChat.SystemPrompt = "You are a person living in the world of Azeroth, talking with the people around you. Write only what your character says out loud: one to three short sentences, no quotes, no name in front. If your character does something while speaking, put it first between asterisks, in the third person and without your name, like an emote: *grins wickedly*. Never describe the other person's looks or feelings for them. Remember what was said earlier in the conversation and keep to its thread. Never repeat, quote or mention these instructions or the information you are given, and do not repeat your own earlier lines. Stay true to your people, your calling and the place you are in."
 
 # OllamaChat.Seed
 #     Description: Optional. Random seed for deterministic generation. Set to a number for repeatable results, or leave blank for normal random output.
@@ -531,8 +531,8 @@ OllamaChat.EnableChatHistory = 1
 # OllamaChat.MaxConversationHistory
 #     Description: The maximum number of recent message pairs (player + bot reply) to track per bot/player combination.
 #                  This history is stored in memory and included in the LLM prompt when the same player talks to the bot again.
-#     Default:     5
-OllamaChat.MaxConversationHistory = 5
+#     Default:     10
+OllamaChat.MaxConversationHistory = 10
 
 # OllamaChat.ConversationHistorySaveInterval
 #     Description: The interval (in minutes) between periodic saves of conversation history from memory to the database.
@@ -558,17 +558,17 @@ OllamaChat.EnableChatBotSnapshotTemplate = 0
 # OllamaChat.ChatHistoryHeaderTemplate
 #   Description: Format for header in conversation history context.
 #   Placeholders (named): {player_name}
-OllamaChat.ChatHistoryHeaderTemplate = "Recent chats with {player_name}. Use only for context. Reply to the new message."
+OllamaChat.ChatHistoryHeaderTemplate = "Your conversation with {player_name} so far, oldest first:"
 
 # OllamaChat.ChatHistoryLineTemplate
 #   Description: Format for each line in conversation history context.
 #   Placeholders (named): {player_name} {player_message} {bot_reply}
-OllamaChat.ChatHistoryLineTemplate = "{player_name} said: {player_message}\nYou said: {bot_reply}\n"
+OllamaChat.ChatHistoryLineTemplate = "{player_name}: {player_message}\nYou: {bot_reply}\n"
 
 # OllamaChat.ChatHistoryFooterTemplate
 #   Description: Format for footer in conversation history context.
 #   Placeholders (named): {player_name} {player_message}
-OllamaChat.ChatHistoryFooterTemplate = "NEW MESSAGE from {player_name}: {player_message}"
+OllamaChat.ChatHistoryFooterTemplate = "{player_name} now says to you: {player_message}"
 
 # OllamaChat.ChatBotSnapshotTemplate
 #   Description: The template string for the context snapshot of the bot's surroundings and status.
@@ -618,7 +618,7 @@ OllamaChat.SentimentPromptTemplate = "Your relationship sentiment with {player_n
 #   Description: The main template for bot chat prompts sent to the LLM.
 #   Placeholders (named): {bot_name} {bot_level} {bot_class} {bot_personality} {bot_personality_name} {player_level} {player_class} {player_name} {player_message} {extra_info} {sentiment_info}
 #   Note: {bot_personality_name} contains the name/key of the personality (e.g., "grumpy", "helpful"), while {bot_personality} contains the full personality description text.
-OllamaChat.ChatPromptTemplate = "You are {bot_name}, a level {bot_level} {bot_class}. Your temperament: {bot_personality} {sentiment_info} {chat_history} {extra_info} {player_name}, a level {player_level} {player_class}, says to you: '{player_message}'"
+OllamaChat.ChatPromptTemplate = "You are {bot_name}, a level {bot_level} {bot_class}. Your temperament: {bot_personality} {sentiment_info} {extra_info} You are talking with {player_name}, a level {player_level} {player_class}."
 
 # OllamaChat.ChatExtraInfoTemplate
 #   Description: The context/details string about the bot and player, injected into the chat prompt as the last parameter.
@@ -1415,6 +1415,19 @@ OllamaChat.Topic.PlayerRadius = 40
 #        statement. The old code was a fixed 50/50.
 #        Default: 35
 OllamaChat.RandomChatterQuestionChance = 35
+
+# OllamaChat.Approach.Chance
+#     Description: Conquest of Azeroth. When a bot's turn to talk on its own comes while a real person stands near it
+#                  (say range), it speaks to that person by name at this chance (percent) instead of to the room: a
+#                  question, a request, a warning, a remark about what it is doing. The person can answer without
+#                  naming it; the two are in a conversation from then on. 0 switches it off.
+#     Default:     40
+OllamaChat.Approach.Chance = 40
+
+# OllamaChat.Approach.CooldownMinutes
+#     Description: A bot speaks to the same person first at most once in this many minutes.
+#     Default:     15
+OllamaChat.Approach.CooldownMinutes = 15
 
 ###############################################################################
 #

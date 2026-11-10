@@ -53,6 +53,11 @@ void Governor_NoteConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
 bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
                              const std::string& scopeKey);
 
+// The bot this person is talking to right now, or Empty. Set when a bot answers them and when they turn to a bot by
+// name or target; runs out after ConversationWindowSeconds of silence.
+void Governor_SetPartner(ObjectGuid playerGuid, ObjectGuid botGuid);
+ObjectGuid Governor_GetPartner(ObjectGuid playerGuid);
+
 // --- cooldowns and rate limits -------------------------------------------
 
 // Checks per-bot cooldown, per-scope cooldown, scope rate and global rate.
