@@ -262,6 +262,14 @@ void Bond_SaveAll()
         CharacterDatabase.CommitTransaction(trans);
 }
 
+void Bond_Forget(uint64_t guid)
+{
+    std::lock_guard<std::mutex> lock(g_bondMutex);
+    g_bonds.erase(guid);
+    for (auto& [bot, people] : g_bonds)
+        people.erase(guid);
+}
+
 void Bond_NoteTalk(Player* bot, Player* other)
 {
     if (!g_BondEnable || !bot || !other || IsBot(other))

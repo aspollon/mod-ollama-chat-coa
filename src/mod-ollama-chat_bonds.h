@@ -24,6 +24,7 @@ void Bond_Load();
 void Bond_SaveAll();
 void Bond_Update();                 // every few seconds, world thread: summaries of conversations that went quiet
 void Bond_RegisterBridge();         // once, at startup
+void Bond_Forget(uint64_t guid);    // a deleted character: its bonds, and the bonds of others with it
 
 // A person and the bot exchanged a line (world thread).
 void Bond_NoteTalk(Player* bot, Player* other);

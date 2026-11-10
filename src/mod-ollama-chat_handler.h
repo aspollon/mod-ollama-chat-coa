@@ -77,8 +77,10 @@ public:
 class OllamaChatMaintenance : public PlayerScript
 {
 public:
-    OllamaChatMaintenance() : PlayerScript("OllamaChatMaintenance", { PLAYERHOOK_ON_LOGOUT }) {}
+    OllamaChatMaintenance() : PlayerScript("OllamaChatMaintenance", { PLAYERHOOK_ON_LOGOUT, PLAYERHOOK_ON_DELETE_FROM_DB }) {}
     void OnPlayerLogout(Player* player) override;
+    // A deleted character takes what the module stored about it along (Conquest of Azeroth).
+    void OnPlayerDeleteFromDB(CharacterDatabaseTransaction trans, uint32 guid) override;
 };
 
 #endif // MOD_OLLAMA_CHAT_HANDLER_H

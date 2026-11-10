@@ -3,6 +3,7 @@
 #include "mod-ollama-chat_lore.h"
 #include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_hygiene.h"
 #include "Language.h"
 #include "Player.h"
 #include "Chat.h"
@@ -2301,6 +2302,19 @@ std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textE
 // Maintenance
 // --------------------------------------------------------------------------
 
+void OllamaChatMaintenance::OnPlayerDeleteFromDB(CharacterDatabaseTransaction trans, uint32 guid)
+{
+    Hygiene_OnCharacterDeleted(trans, guid);
+    Memory_ForgetBot(ObjectGuid::Create<HighGuid::Player>(guid));
+    Bond_Forget(guid);
+    {
+        std::lock_guard<std::mutex> lock(g_ConversationHistoryMutex);
+        g_BotConversationHistory.erase(guid);
+        for (auto& [bot, people] : g_BotConversationHistory)
+            people.erase(guid);
+    }
+}
+
 void OllamaChatMaintenance::OnPlayerLogout(Player* player)
 {
     if (!player)
@@ -2312,7 +2326,8 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     const ObjectGuid guid = player->GetGUID();
 
     Governor_OnPlayerLogout(guid);
-    Memory_ForgetBot(guid);
+    // Memories stay in memory: they are loaded once at start, so dropping them here made a bot that logged out and
+    // in again forget everything until the next restart - and lost what was not saved yet (Conquest of Azeroth).
     OllamaRandomChatter_ForgetBot(guid);
     Topics_ForgetBot(guid);
 }

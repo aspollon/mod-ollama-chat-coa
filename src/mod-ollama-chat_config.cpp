@@ -12,6 +12,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_presence.h"
+#include "mod-ollama-chat_hygiene.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
 #include <algorithm>
@@ -1241,6 +1242,8 @@ OllamaChatConfigWorldScript::OllamaChatConfigWorldScript() : WorldScript("Ollama
 void OllamaChatConfigWorldScript::OnStartup()
 {
     LoadOllamaChatConfig();
+    // Before anything is loaded: what belongs to deleted characters goes (Conquest of Azeroth).
+    Hygiene_Run();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
     InitializeSentimentTracking();
