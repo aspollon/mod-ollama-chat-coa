@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_topics.h"
+#include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
@@ -137,7 +138,7 @@ namespace
     {
         PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(p);
         if (ai && ai->GetChatHelper())
-            return ai->GetChatHelper()->FormatRace(p->getRace());
+            return Coa_RaceName(p->getRace());
         return "traveller";
     }
 

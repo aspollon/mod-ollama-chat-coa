@@ -1,4 +1,5 @@
 ﻿#include "Log.h"
+#include "mod-ollama-chat_coa.h"
 #include "Language.h"
 #include "Player.h"
 #include "Chat.h"
@@ -1093,6 +1094,36 @@ std::string GenerateBotGameStateSnapshot(Player* bot)
     );
 }
 
+// A character named in a message ("hey Klaus, what's up", "Klaus?"), other than the sender: any word of the message
+// that is the name of someone online. Names are capitalised the way the game stores them. nullptr when nobody is named.
+static Player* OllamaFindNamedOther(const std::string& message, Player* sender)
+{
+    std::string word;
+    auto check = [&](std::string const& w) -> Player*
+    {
+        if (w.size() < 2 || w.size() > 12)
+            return nullptr;
+        std::string name = w;
+        for (char& c : name)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+        Player* p = ObjectAccessor::FindPlayerByName(name);
+        return p && p != sender ? p : nullptr;
+    };
+    for (char ch : message)
+    {
+        if (std::isalpha(static_cast<unsigned char>(ch)) || (static_cast<unsigned char>(ch) & 0x80))
+            word += ch;
+        else
+        {
+            if (Player* p = check(word))
+                return p;
+            word.clear();
+        }
+    }
+    return check(word);
+}
+
 
 void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth)
 {
@@ -1629,6 +1660,14 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                 }
             }
         }
+        else if (Player* named = OllamaFindNamedOther(trimmedMsg, player))
+        {
+            // The message names someone ("hey Klaus, what's up") who is not among the bots that could answer here:
+            // out of range, on the other side, or a real player. It was meant for them, so nobody else butts in.
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Message names {}, who is not a candidate here; no other bot answers.",
+                         named->GetName());
+        }
         else
         {
             for (Player* bot : candidateBots)
@@ -1933,7 +1972,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     std::string botZoneName         = botCurrentZone ? botAI->GetLocalizedAreaName(botCurrentZone): "UnknownZone";
     std::string botMapName          = OllamaContinentName(bot);
     std::string botClass            = botAI->GetChatHelper()->FormatClass(bot->getClass());
-    std::string botRace             = botAI->GetChatHelper()->FormatRace(bot->getRace());
+    std::string botRace             = Coa_RaceName(bot->getRace());
     std::string botRole             = CleanRoleForPrompt(ChatHelper::FormatClass(bot, AiFactory::GetPlayerSpecTab(bot)));
     std::string botGender           = (botGenderByte == 0 ? "Male" : "Female");
     std::string botFaction          = (bot->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde");
@@ -1944,7 +1983,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     std::string playerName          = player->GetName();
     uint32_t playerLevel            = player->GetLevel();
     std::string playerClass         = botAI->GetChatHelper()->FormatClass(player->getClass());
-    std::string playerRace          = botAI->GetChatHelper()->FormatRace(player->getRace());
+    std::string playerRace          = Coa_RaceName(player->getRace());
     std::string playerRole          = CleanRoleForPrompt(ChatHelper::FormatClass(player, AiFactory::GetPlayerSpecTab(player)));
     uint8_t playerGenderByte        = player->getGender();
     std::string playerGender        = (playerGenderByte == 0 ? "Male" : "Female");
@@ -2066,12 +2105,12 @@ std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textE
         fmt::arg("bot_name", bot->GetName()),
         fmt::arg("bot_level", bot->GetLevel()),
         fmt::arg("bot_class", botAI->GetChatHelper()->FormatClass(bot->getClass())),
-        fmt::arg("bot_race", botAI->GetChatHelper()->FormatRace(bot->getRace())),
+        fmt::arg("bot_race", Coa_RaceName(bot->getRace())),
         fmt::arg("bot_personality", personalityPrompt),
         fmt::arg("bot_personality_name", personality),
         fmt::arg("player_name", player->GetName()),
         fmt::arg("player_class", botAI->GetChatHelper()->FormatClass(player->getClass())),
-        fmt::arg("player_race", botAI->GetChatHelper()->FormatRace(player->getRace())),
+        fmt::arg("player_race", Coa_RaceName(player->getRace())),
         fmt::arg("emote_name", emoteName));
 
     if (g_RoleplayEnable)

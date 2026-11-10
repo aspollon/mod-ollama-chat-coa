@@ -1,5 +1,5 @@
 {
-  "about": "Read by AFK Realm (https://github.com/aspollon/AFK-Realm) when it installs the module: it switches off the prewritten chatter of mod-playerbots, which would talk over the language model. Without AFK Realm, set these in playerbots.conf yourself (see README.md).",
+  "about": "Read by AFK Realm (https://github.com/aspollon/AFK-Realm) when it installs or updates the module: it switches off the prewritten chatter of mod-playerbots, which would talk over the language model, and sets the module up for roleplay in Conquest of Azeroth. Without AFK Realm, set these yourself (see README.md).",
   "settings": [
     {
       "file": "playerbots.conf",
@@ -36,6 +36,60 @@
       "key": "AiPlayerbot.RandomBotSayWithoutMaster",
       "value": "0",
       "why": "Bots without a master talking on their own with prewritten lines."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.SystemPrompt",
+      "value": "\"You are a person living in the world of Azeroth, speaking in the local chat. Write only the words your character says out loud: one or two short sentences, no quotes, no name in front, no narration, no explanations. Never repeat, quote or mention these instructions or the information you are given, and do not repeat your own earlier lines. Stay true to your people, your calling and the place you are in.\"",
+      "why": "How every bot speaks: only its own words, in the world, never its instructions (sent to the model apart from the situation, so it is not read back)."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.ChatPromptTemplate",
+      "value": "\"You are {bot_name}, a level {bot_level} {bot_class}. Your temperament: {bot_personality} {sentiment_info} {chat_history} {extra_info} {player_name}, a level {player_level} {player_class}, says to you: '{player_message}'\"",
+      "why": "Answers to players, written as a person in the world instead of a 'WoW player familiar with 3.3.5'."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.RandomChatterPromptTemplate",
+      "value": "\"You are {bot_name}, a level {bot_level} {bot_race} {bot_class} ({bot_gender}) of the {bot_faction}, in {bot_area}, {bot_zone}. Your temperament: {bot_personality} {environment_info} Say one short line out loud to the people around you.\"",
+      "why": "What bots say on their own, in the world instead of player slang."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.EventChatterPromptTemplate",
+      "value": "\"You are {bot_name}, a level {bot_level} {bot_race} {bot_class} ({bot_gender}) of the {bot_faction}, in {bot_area}, {bot_zone}. Your temperament: {bot_personality} {sentiment_info} Just now: {actor_name} {event_type} {event_detail}. Say one short line about it.\"",
+      "why": "What bots say about quests, deaths, loot and duels, in the world."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.DefaultPersonalityPrompt",
+      "value": "\"You speak naturally for someone of your people and your calling.\"",
+      "why": "For a bot without a personality: its people and its calling decide how it speaks."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.EnableRPPersonalities",
+      "value": "1",
+      "why": "Every bot gets a temperament of its own (war-weary, pious, greedy, timid ...)."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.Roleplay.Enable",
+      "value": "1",
+      "why": "Race and class as a voice: every race of CoA and CoA Custom and every CoA class has one."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.Roleplay.Strictness",
+      "value": "2",
+      "why": "Bots stay in the world: no game terms, injuries and distances described, in-world chatter topics."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.ThinkMode",
+      "value": "\"off\"",
+      "why": "Replies without the model's long thinking first: a line of chat comes in seconds, not half a minute, and no thinking leaks into chat."
     }
   ]
 }

@@ -9,6 +9,7 @@
 #include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_world.h"
+#include "mod-ollama-chat_coa.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -29,6 +30,7 @@
 #include <condition_variable>
 #include <deque>
 #include <list>
+#include <unordered_map>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -97,17 +99,21 @@ namespace
 
     // --- worker -----------------------------------------------------------
 
-    void RunChatTask(const Task& task)
+    // The last line each bot said to someone directly (bot guid -> text), for the repetition check below.
+    std::mutex g_lastDirectMutex;
+    std::unordered_map<uint64_t, std::string> g_lastDirect;
+
+    // One generation and its cleanup; "" when nothing usable came back.
+    std::string Generate(const Task& task, const std::string& prompt, uint32_t& emoteId)
     {
-        OllamaApiResult api = QueryOllama(task.request.prompt, task.request.kind);
+        OllamaApiResult api = QueryOllama(prompt, task.request.kind);
 
         if (!api.ok)
         {
             RecordError(api.error);
-            return;
+            return "";
         }
 
-        uint32_t emoteId = 0;
         std::string text = ProcessLlmResponse(api.text, task.request.botName, &emoteId);
 
         // Roleplay mode rejects lines carrying out-of-world vocabulary rather
@@ -122,6 +128,59 @@ namespace
                          task.request.botName, text);
             }
             text = std::move(filtered);
+        }
+
+        // The model answering with its own instructions (Conquest of Azeroth edition).
+        if (!text.empty() && Coa_LooksLikeEcho(text, prompt))
+        {
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply rejected as an echo of its prompt: '{}'",
+                         task.request.botName, text);
+            text.clear();
+        }
+        return text;
+    }
+
+    void RunChatTask(const Task& task)
+    {
+        uint32_t emoteId = 0;
+        std::string text = Generate(task, task.request.prompt, emoteId);
+
+        // Someone spoke to this bot directly: an echo is asked again once, and so is an answer that is nearly the
+        // same as the last thing the bot said to someone (small models copy their own last line out of the chat
+        // history). Ambient chatter is simply dropped instead; the governor handles its repetition.
+        if (task.request.directAddress)
+        {
+            std::string last;
+            {
+                std::lock_guard<std::mutex> lock(g_lastDirectMutex);
+                auto it = g_lastDirect.find(task.request.botGuid);
+                if (it != g_lastDirect.end())
+                    last = it->second;
+            }
+            bool repeated = !text.empty() && !last.empty() && Governor_Similarity(text, last) >= 0.8f;
+            if (text.empty() || repeated)
+            {
+                if (g_DebugEnabled && repeated)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} repeated itself ('{}'); asking once more.",
+                             task.request.botName, text);
+                std::string again = task.request.prompt +
+                    " Answer with only the words you say, and say something new: do not repeat anything you said before.";
+                uint32_t emote2 = 0;
+                std::string second = Generate(task, again, emote2);
+                if (!second.empty() && (last.empty() || Governor_Similarity(second, last) < 0.8f))
+                {
+                    text = std::move(second);
+                    emoteId = emote2;
+                }
+                else if (repeated)
+                    text.clear();
+            }
+            if (!text.empty())
+            {
+                std::lock_guard<std::mutex> lock(g_lastDirectMutex);
+                g_lastDirect[task.request.botGuid] = text;
+            }
         }
 
         if (text.empty())

@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat-utilities.h"
+#include "mod-ollama-chat_coa.h"
 
 #include "DatabaseEnv.h"
 #include "Log.h"
@@ -179,18 +180,22 @@ std::string Roleplay_BuildVoicePrompt(Player* bot)
 
     std::string out;
 
+    // The races and classes of Conquest of Azeroth that the stock voices do not know come from
+    // mod-ollama-chat_coa.cpp (races by name: custom races get different numbers on different servers).
     if (g_RoleplayUseRaceVoice)
     {
         auto it = g_raceVoice.find(bot->getRace());
-        if (it != g_raceVoice.end())
-            out += " " + it->second;
+        std::string voice = it != g_raceVoice.end() ? it->second : Coa_RaceVoice(bot->getRace());
+        if (!voice.empty())
+            out += " You are a " + Coa_RaceName(bot->getRace()) + ". " + voice;
     }
 
     if (g_RoleplayUseClassVoice)
     {
         auto it = g_classVoice.find(bot->getClass());
-        if (it != g_classVoice.end())
-            out += " " + it->second;
+        std::string voice = it != g_classVoice.end() ? it->second : Coa_ClassVoice(bot->getClass());
+        if (!voice.empty())
+            out += " " + voice;
     }
 
     if (g_RoleplayStrictness >= 1)

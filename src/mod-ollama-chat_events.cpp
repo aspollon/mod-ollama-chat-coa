@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_events.h"
+#include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
@@ -319,7 +320,7 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
         fmt::arg("bot_name", bot->GetName()),
         fmt::arg("bot_level", bot->GetLevel()),
         fmt::arg("bot_class", ai->GetChatHelper()->FormatClass(bot->getClass())),
-        fmt::arg("bot_race", ai->GetChatHelper()->FormatRace(bot->getRace())),
+        fmt::arg("bot_race", Coa_RaceName(bot->getRace())),
         fmt::arg("bot_gender", bot->getGender() == GENDER_MALE ? "Male" : "Female"),
         fmt::arg("bot_role", CleanRoleForPrompt(ChatHelper::FormatClass(bot, AiFactory::GetPlayerSpecTab(bot)))),
         fmt::arg("bot_faction", bot->GetTeamId() == TEAM_ALLIANCE ? "Alliance" : "Horde"),

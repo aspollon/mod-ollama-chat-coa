@@ -634,7 +634,12 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind)
         return result;
     }
 
-    const OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+    OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+
+    // The system prompt tells the model how a character speaks. Sentiment, memory and relationship requests are
+    // judgements in a fixed format, not speech, and that prompt would only get in their way.
+    if (kind == OllamaRequestKind::Sentiment)
+        cfg.systemPrompt.clear();
 
     // One place decides what the "think" field should be: policy for this
     // request kind, plus everything learned about this model so far.
