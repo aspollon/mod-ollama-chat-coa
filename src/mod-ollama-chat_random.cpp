@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_random.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_lore.h"
+#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
@@ -199,6 +200,7 @@ namespace
         prompt += std::string(person->GetName()) + ", a " + Coa_RaceName(person->getRace()) + " " +
                   botAI->GetChatHelper()->FormatClass(person->getClass()) + ", is near you. ";
         prompt += GetSentimentPromptAddition(bot, person);
+        prompt += Bond_BuildPromptSection(bot, person);
         prompt += Lore_BuildSection(bot, person, std::string());
         prompt += Memory_BuildPromptSection(bot, person);
         prompt += Roleplay_BuildVoicePrompt(bot);
@@ -301,6 +303,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         maintenanceTimer = 30000;
         Governor_Update();
         Topics_Update();
+        Bond_Update();
     }
     else
     {
@@ -323,6 +326,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         if (difftime(now, g_LastMemorySaveTime) >= g_MemorySaveInterval * 60)
         {
             Memory_SaveAll();
+            Bond_SaveAll();
             g_LastMemorySaveTime = now;
         }
     }

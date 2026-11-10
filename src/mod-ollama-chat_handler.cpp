@@ -1,6 +1,7 @@
 ﻿#include "Log.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_lore.h"
+#include "mod-ollama-chat_bonds.h"
 #include "Language.h"
 #include "Player.h"
 #include "Chat.h"
@@ -2080,7 +2081,10 @@ std::string OllamaDescribeSituation(Player* bot, Player* player)
             parts.push_back(who + " is looking at you.");
     }
 
-    std::string out = "Right now: ";
+    // Who the bot is right now, as the other modules know it (an Immersion beggar, an Auctions trader ...).
+    const std::string persona = Bond_PersonaSection(bot);
+
+    std::string out = persona.empty() ? "Right now: " : persona + " Right now: ";
     for (size_t i = 0; i < parts.size(); ++i)
         out += (i ? " " : "") + parts[i];
     return out;
@@ -2197,6 +2201,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("chat_history", std::string()),
         fmt::arg("sentiment_info", sentimentInfo)
     );
+
+    // Who the person is to this bot: stranger, friend, beloved, enemy; and what they last talked about.
+    prompt += Bond_BuildPromptSection(bot, player);
 
     // Where the bot is and what it is doing, so it can talk from inside its own day.
     prompt += " " + OllamaDescribeSituation(bot, player);

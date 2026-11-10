@@ -43,6 +43,7 @@ struct BotMemoryEntry
     std::string text;
     uint8_t     importance = 5;   // 1..10
     uint64_t    createdAt  = 0;   // unix seconds
+    uint64_t    aboutGuid  = 0;   // an experience with this person; the bot's own guid for its own doings; 0 for notes
 };
 
 struct BotRelationship
@@ -72,6 +73,10 @@ void Memory_NoteExchange(uint64_t botGuid, uint64_t otherGuid,
 // first so the bot's attitude to whoever it is talking to always survives the
 // budget.
 std::string Memory_BuildPromptSection(Player* bot, Player* about);
+
+// Conquest of Azeroth: something the bot went through ("You and Chris killed Hogger in Elwynn Forest."), with a
+// person (`aboutGuid`) or alone (its own guid). Kept with its other memories, so the same limits apply. World thread.
+void Memory_AddExperience(uint64_t botGuid, uint64_t aboutGuid, const std::string& text, uint8_t importance);
 
 // --- worker-side entry points (called from the dispatcher) ----------------
 

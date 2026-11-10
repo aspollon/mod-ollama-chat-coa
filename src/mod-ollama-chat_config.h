@@ -247,6 +247,11 @@ extern uint32_t g_ApproachCooldownMinutes;
 extern bool     g_LoreEnable;
 extern uint32_t g_LoreMaxTopics;
 
+// Conquest of Azeroth: bonds between bots and people, and the voice other modules hand their lines to.
+extern bool     g_BondEnable;
+extern bool     g_BondRomance;
+extern bool     g_VoiceEnable;
+
 extern std::vector<std::string> g_EnvCommentNearbyPlayer;
 extern std::vector<std::string> g_EnvCommentGroupMember;
 extern std::vector<std::string> g_EnvCommentGuildMemberOnline;

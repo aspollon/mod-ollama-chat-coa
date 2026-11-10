@@ -671,3 +671,81 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
     reply = TrimCopy(reply);
     return actions;
 }
+
+// ---------------------------------------------------------------------------
+// Lines handed over by other modules
+// ---------------------------------------------------------------------------
+
+std::vector<std::string> Coa_TakeLinks(std::string& line)
+{
+    std::vector<std::string> links;
+    for (size_t start = 0; (start = line.find('|', start)) != std::string::npos;)
+    {
+        // A link starts with an optional colour (|cAARRGGBB) and |H, and ends with |h[...]|h and an optional |r.
+        size_t h = start;
+        if (h + 1 < line.size() && (line[h + 1] == 'c' || line[h + 1] == 'C'))
+        {
+            if (h + 10 >= line.size() || line[h + 10] != '|')
+            {
+                ++start;
+                continue;
+            }
+            h += 10;
+        }
+        if (h + 1 >= line.size() || line[h + 1] != 'H')
+        {
+            ++start;
+            continue;
+        }
+        size_t text = line.find("|h", h + 2);
+        size_t end = text == std::string::npos ? std::string::npos : line.find("|h", text + 2);
+        if (end == std::string::npos)
+            break;
+        end += 2;
+        if (end + 1 < line.size() && line[end] == '|' && (line[end + 1] == 'r' || line[end + 1] == 'R'))
+            end += 2;
+        links.push_back(line.substr(start, end - start));
+        const std::string marker = "[" + std::to_string(links.size()) + "]";
+        line.replace(start, end - start, marker);
+        start += marker.size();
+    }
+    return links;
+}
+
+bool Coa_KeepsNumbers(const std::string& original, const std::string& rewritten)
+{
+    std::string plain = original;
+    Coa_TakeLinks(plain);
+    // The markers themselves are not numbers of the message.
+    for (size_t i = 0; (i = plain.find('[', i)) != std::string::npos;)
+    {
+        size_t j = plain.find(']', i);
+        if (j == std::string::npos)
+            break;
+        plain.erase(i, j - i + 1);
+    }
+
+    auto numbers = [](const std::string& v)
+    {
+        std::vector<std::string> out;
+        for (size_t i = 0; i < v.size();)
+        {
+            if (!std::isdigit(static_cast<unsigned char>(v[i]))) { ++i; continue; }
+            size_t j = i;
+            while (j < v.size() && std::isdigit(static_cast<unsigned char>(v[j])))
+                ++j;
+            out.push_back(v.substr(i, j - i));
+            i = j;
+        }
+        return out;
+    };
+    std::vector<std::string> have = numbers(rewritten);
+    for (const std::string& n : numbers(plain))
+    {
+        auto it = std::find(have.begin(), have.end(), n);
+        if (it == have.end())
+            return false;
+        have.erase(it);
+    }
+    return true;
+}

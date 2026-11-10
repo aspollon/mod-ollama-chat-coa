@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_sentiment.h"
+#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -60,8 +61,12 @@ std::string BuildSentimentPrompt(const std::string& message)
     return SafeFormat(g_SentimentAnalysisPrompt, fmt::arg("message", message));
 }
 
+// How the last message analysed on this thread sounded, for the bond between bot and person (Conquest of Azeroth).
+static thread_local BondTone t_lastTone = BondTone::Neutral;
+
 float AnalyzeMessageSentiment(const std::string& prompt)
 {
+    t_lastTone = BondTone::Neutral;
     if (!g_EnableSentimentTracking || prompt.empty())
         return 0.0f;
     
@@ -87,14 +92,22 @@ float AnalyzeMessageSentiment(const std::string& prompt)
     std::transform(upperResponse.begin(), upperResponse.end(), upperResponse.begin(), ::toupper);
     
     // Parse the sentiment response
+    // FRIENDLY / ROMANTIC / HOSTILE from the Conquest of Azeroth prompt; POSITIVE / NEGATIVE from the original's.
     float adjustment = 0.0f;
-    if (upperResponse.find("POSITIVE") != std::string::npos)
+    if (upperResponse.find("ROMANTIC") != std::string::npos || upperResponse.find("FLIRT") != std::string::npos)
     {
         adjustment = g_SentimentAdjustmentStrength;
+        t_lastTone = BondTone::Romantic;
     }
-    else if (upperResponse.find("NEGATIVE") != std::string::npos)
+    else if (upperResponse.find("POSITIVE") != std::string::npos || upperResponse.find("FRIENDLY") != std::string::npos)
+    {
+        adjustment = g_SentimentAdjustmentStrength;
+        t_lastTone = BondTone::Friendly;
+    }
+    else if (upperResponse.find("NEGATIVE") != std::string::npos || upperResponse.find("HOSTILE") != std::string::npos)
     {
         adjustment = -g_SentimentAdjustmentStrength;
+        t_lastTone = BondTone::Hostile;
     }
     // NEUTRAL or unrecognized = 0.0f (no change)
     
@@ -115,6 +128,7 @@ void ApplySentimentAnalysis(uint64_t botGuid, uint64_t playerGuid,
 
     const float currentSentiment = GetBotPlayerSentiment(botGuid, playerGuid);
     const float adjustment       = AnalyzeMessageSentiment(prompt);
+    Bond_ApplyTone(botGuid, playerGuid, t_lastTone);
 
     if (adjustment == 0.0f)
         return;

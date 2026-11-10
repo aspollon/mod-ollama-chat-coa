@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_events.h"
+#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_world.h"
@@ -354,7 +355,10 @@ ChatOnKill::ChatOnKill()
 void ChatOnKill::OnPlayerCreatureKill(Player* killer, Creature* victim)
 {
     if (killer && victim)
+    {
         eventChatter.DispatchGameEvent(killer, g_EventTypeDefeated, victim->GetName());
+        Experience_OnCreatureKill(killer, victim);
+    }
 }
 
 void ChatOnKill::OnPlayerPVPKill(Player* killer, Player* killed)
@@ -406,7 +410,10 @@ ChatOnDeath::ChatOnDeath()
 void ChatOnDeath::OnPlayerJustDied(Player* player)
 {
     if (player)
+    {
         eventChatter.DispatchGameEvent(player, g_EventTypeDied, "");
+        Experience_OnDeath(player);
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -420,6 +427,7 @@ void ChatOnQuest::OnPlayerCompleteQuest(Player* player, Quest const* quest)
         return;
 
     eventChatter.DispatchGameEvent(player, g_EventTypeCompletedQuest, quest->GetTitle());
+    Experience_OnQuestComplete(player, quest);
 
     if (player->GetGuild() && g_EnableGuildEventChatter &&
         !g_GuildEventTypeDungeonComplete.empty() &&
@@ -470,7 +478,10 @@ void ChatOnDuel::OnPlayerDuelStart(Player* player1, Player* player2)
 void ChatOnDuel::OnPlayerDuelEnd(Player* winner, Player* loser, DuelCompleteType /*type*/)
 {
     if (winner && loser)
+    {
         eventChatter.DispatchGameEvent(winner, g_EventTypeWonDuel, loser->GetName());
+        Experience_OnDuelEnd(winner, loser);
+    }
 }
 
 // --------------------------------------------------------------------------

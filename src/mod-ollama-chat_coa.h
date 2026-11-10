@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // Conquest of Azeroth: the races and classes the way this world has them.
 //
@@ -38,5 +39,12 @@ size_t Coa_FindName(const std::string& message, const std::string& name);
 // of the reply. "" when the reply has none. Second person ("you look ...") is turned into third person where the
 // verb allows it.
 std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName);
+
+// Item, quest and spell links ("|cff1eff00|Hitem:2589:...|h[Linen Cloth]|h|r") taken out of a line and replaced by
+// [1], [2] ..., so the language model cannot break them; returns the links in order.
+std::vector<std::string> Coa_TakeLinks(std::string& line);
+
+// Every number of `original` (outside its links) is still in `rewritten`: counts and prices survived.
+bool Coa_KeepsNumbers(const std::string& original, const std::string& rewritten);
 
 #endif

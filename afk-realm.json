@@ -147,63 +147,27 @@
     },
     {
       "file": "mod_playerbots_immersion.conf",
-      "key": "CityLife.Custom.Legendary.ChatMinSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion legendaries come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "CityLife.Custom.Legendary.ChatMaxSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion legendaries come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "CityLife.Custom.Beggar.ChatMinSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion beggars come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "CityLife.Custom.Beggar.ChatMaxSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion beggars come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "CityLife.Custom.Buyer.ChatMinSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion buyers come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "CityLife.Custom.Buyer.ChatMaxSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion buyers come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
       "key": "CityLife.Custom.Beggar.YellChancePct",
       "value": "0",
       "why": "The beggars no longer yell their prewritten lines across the square."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "FishingLife.ChatMinSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion anglers come at most once a day; the language model talks for them."
-    },
-    {
-      "file": "mod_playerbots_immersion.conf",
-      "key": "FishingLife.ChatMaxSeconds",
-      "value": "86400",
-      "why": "The prewritten lines of the Immersion anglers come at most once a day; the language model talks for them."
     },
     {
       "file": "mod_ollama_chat.conf",
       "key": "OllamaChat.NumCtx",
       "value": "8192",
       "why": "Room for the bot's voice, knowledge, memory and the conversation: with the model's short default the beginning of the prompt, its instructions, was cut off."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.SentimentAnalysisPrompt",
+      "value": "\"How does this message sound to the one it is said to: \\\"{message}\\\"? Answer with one word only: FRIENDLY, ROMANTIC, HOSTILE or NEUTRAL.\"",
+      "why": "How a message sounds - friendly, romantic, hostile - moves the bond between the bot and the person."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.Memory.MaxPerBot",
+      "value": "80",
+      "why": "Room for what a bot went through with the people it knows, besides what it remembers of conversations."
     }
   ]
 }

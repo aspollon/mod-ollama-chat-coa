@@ -7,6 +7,8 @@
 #include "ObjectGuid.h"
 #include <string>
 #include <cstdint>
+#include <functional>
+#include <vector>
 
 class Player;
 class Channel;
@@ -85,6 +87,13 @@ struct OllamaChatRequest
     bool triggerBotReplies = true;   // let other bots hear this line
     bool recordHistory     = false;  // append to conversation history
     bool updateSentiment   = false;  // run sentiment analysis on originMessage
+
+    // A line another module handed over to be said in the bot's own words (CoaChatBridge::Speak). It is always
+    // said: if the model fails, or drops an item, a number or a marker of an exact line, the original goes out.
+    bool                     voice = false;
+    bool                     voiceExact = true;
+    std::string              voiceOriginal;   // the line as the module wrote it, item links and all
+    std::vector<std::string> voiceLinks;      // the links taken out of it, standing as [1], [2] ... in the prompt
 };
 
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which
@@ -115,6 +124,9 @@ void OllamaDispatch_SubmitRelationship(uint64_t botGuid, uint64_t otherGuid,
 
 // A player emoted at a bot and the bot decided to answer in words.
 // World thread only.
+// Background work for a worker thread (a summary, say); it may call QueryOllama. Dropped when the queue is busy.
+bool OllamaDispatch_SubmitJob(std::function<void()> job);
+
 void OllamaChat_DispatchEmoteReaction(Player* bot, Player* player, uint32_t textEmote);
 
 struct OllamaDispatchStats

@@ -210,7 +210,7 @@ void Memory_Load()
     g_state.clear();
 
     if (QueryResult result = CharacterDatabase.Query(
-            "SELECT bot_guid, memory_text, importance, UNIX_TIMESTAMP(created_at) "
+            "SELECT bot_guid, memory_text, importance, UNIX_TIMESTAMP(created_at), about_guid "
             "FROM mod_ollama_chat_memories ORDER BY importance DESC"))
     {
         uint32_t loaded = 0;
@@ -221,6 +221,7 @@ void Memory_Load()
             e.text       = f[1].Get<std::string>();
             e.importance = f[2].Get<uint8>();
             e.createdAt  = f[3].Get<uint64>();
+            e.aboutGuid  = f[4].Get<uint64>();
 
             if (!e.text.empty())
             {
@@ -278,14 +279,14 @@ void Memory_SaveAll()
             if (!values.empty())
                 values += ',';
 
-            values += SafeFormat("({}, '{}', {}, FROM_UNIXTIME({}))",
-                                 botGuid, Escape(m.text), uint32_t(m.importance), m.createdAt);
+            values += SafeFormat("({}, '{}', {}, FROM_UNIXTIME({}), {})",
+                                 botGuid, Escape(m.text), uint32_t(m.importance), m.createdAt, m.aboutGuid);
         }
 
         if (!values.empty())
         {
             trans->Append("INSERT INTO mod_ollama_chat_memories "
-                          "(bot_guid, memory_text, importance, created_at) VALUES " + values);
+                          "(bot_guid, memory_text, importance, created_at, about_guid) VALUES " + values);
         }
 
         for (const auto& [otherGuid, r] : state.relationships)
@@ -496,6 +497,47 @@ std::string Memory_BuildPromptSection(Player* bot, Player* about)
             out += SafeFormat(g_RelationshipPromptTemplate, fmt::arg("relationships", lines));
     }
 
+    // ---- what the bot went through with this person, most recent first ----
+    auto ago = [](uint64_t at) -> std::string
+    {
+        const uint64_t now = NowSeconds();
+        const uint64_t d = now > at ? now - at : 0;
+        if (d < 2 * 3600)       return "just now";
+        if (d < 24 * 3600)      return "earlier today";
+        if (d < 2 * 24 * 3600)  return "yesterday";
+        if (d < 7 * 24 * 3600)  return "a few days ago";
+        if (d < 30 * 24 * 3600) return "some weeks ago";
+        return "long ago";
+    };
+
+    std::vector<BotMemoryEntry> shared, own, notes;
+    for (const BotMemoryEntry& m : memories)
+    {
+        if (aboutGuid && m.aboutGuid == aboutGuid)
+            shared.push_back(m);
+        else if (m.aboutGuid == botGuid)
+            own.push_back(m);
+        else if (m.aboutGuid == 0)
+            notes.push_back(m);
+    }
+    auto newest = [](const BotMemoryEntry& a, const BotMemoryEntry& b) { return a.createdAt > b.createdAt; };
+
+    if (!shared.empty() && about)
+    {
+        std::sort(shared.begin(), shared.end(), newest);
+        out += " What you have been through with " + std::string(about->GetName()) + ":";
+        for (size_t i = 0; i < shared.size() && i < 5; ++i)
+            out += " " + shared[i].text + " (" + ago(shared[i].createdAt) + ")";
+    }
+    if (!own.empty())
+    {
+        std::sort(own.begin(), own.end(), newest);
+        out += " What you did lately:";
+        for (size_t i = 0; i < own.size() && i < 3; ++i)
+            out += " " + own[i].text + " (" + ago(own[i].createdAt) + ")";
+    }
+    memories = std::move(notes);
+
     // ---- memories: most important first, inside a token budget ---------
     if (!memories.empty() && !g_MemoryPromptTemplate.empty())
     {
@@ -626,4 +668,42 @@ void Memory_RunRelationshipUpdate(uint64_t botGuid, uint64_t otherGuid,
         LOG_INFO("module.ollamachat",
                  "[Ollama Chat] Bot {} relationship with {} updated: {}",
                  botGuid, otherName, rel.description);
+}
+
+// --------------------------------------------------------------------------
+
+void Memory_AddExperience(uint64_t botGuid, uint64_t aboutGuid, const std::string& text, uint8_t importance)
+{
+    if (!g_MemoryEnable || botGuid == 0 || text.empty())
+        return;
+
+    std::lock_guard<std::mutex> lock(g_mutex);
+    OllamaMemoryState& state = g_state[botGuid];
+
+    // The same thing twice within the hour is one experience ("killed a Defias Pillager" for every pillager).
+    const uint64_t now = NowSeconds();
+    for (const BotMemoryEntry& m : state.memories)
+        if (m.aboutGuid == aboutGuid && m.text == text && m.createdAt + 3600 > now)
+            return;
+
+    BotMemoryEntry e;
+    e.text       = text;
+    e.importance = std::clamp<uint8_t>(importance, 1, 10);
+    e.createdAt  = now;
+    e.aboutGuid  = aboutGuid;
+    state.memories.push_back(std::move(e));
+
+    // Over the limit: the least important and, among those, the oldest go first.
+    if (g_MemoryMaxPerBot > 0 && state.memories.size() > g_MemoryMaxPerBot)
+    {
+        std::sort(state.memories.begin(), state.memories.end(),
+                  [](const BotMemoryEntry& a, const BotMemoryEntry& b)
+                  {
+                      if (a.importance != b.importance)
+                          return a.importance > b.importance;
+                      return a.createdAt > b.createdAt;
+                  });
+        state.memories.resize(g_MemoryMaxPerBot);
+    }
+    state.dirty = true;
 }

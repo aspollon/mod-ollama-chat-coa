@@ -10,6 +10,7 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_roleplay.h"
+#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
 #include <algorithm>
@@ -192,6 +193,9 @@ uint32_t g_ApproachChance = 40;
 uint32_t g_ApproachCooldownMinutes = 15;
 bool     g_LoreEnable = true;
 uint32_t g_LoreMaxTopics = 2;
+bool     g_BondEnable = true;
+bool     g_BondRomance = true;
+bool     g_VoiceEnable = true;
 
 std::vector<std::string> g_EnvCommentNearbyPlayer;
 std::vector<std::string> g_EnvCommentGroupMember;
@@ -834,6 +838,9 @@ void LoadOllamaChatConfig()
     g_ApproachCooldownMinutes         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Approach.CooldownMinutes", 15);
     g_LoreEnable                      = sConfigMgr->GetOption<bool>("OllamaChat.Lore.Enable", true);
     g_LoreMaxTopics                   = std::min<uint32_t>(4, sConfigMgr->GetOption<uint32_t>("OllamaChat.Lore.MaxTopics", 2));
+    g_BondEnable                      = sConfigMgr->GetOption<bool>("OllamaChat.Bond.Enable", true);
+    g_BondRomance                     = sConfigMgr->GetOption<bool>("OllamaChat.Bond.Romance", true);
+    g_VoiceEnable                     = sConfigMgr->GetOption<bool>("OllamaChat.Voice.Enable", true);
 
     // --- Snapshot limits -------------------------------------------------
     g_SnapshotIncludeSpells           = sConfigMgr->GetOption<bool>("OllamaChat.Snapshot.IncludeSpells", false);
@@ -1236,6 +1243,8 @@ void OllamaChatConfigWorldScript::OnStartup()
     InitializeSentimentTracking();
     Roleplay_Load();
     Memory_Load();
+    Bond_Load();
+    Bond_RegisterBridge();
 
     // Spread the three periodic saves so they do not all come due on the same
     // world tick. Each is incremental now, but they queue onto one database
@@ -1278,6 +1287,7 @@ void OllamaChatConfigWorldScript::OnShutdown()
 
     SaveBotConversationHistoryToDB();
     Memory_SaveAll();
+    Bond_SaveAll();
     if (g_EnableSentimentTracking)
         SaveBotPlayerSentimentsToDB();
 

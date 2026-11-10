@@ -607,7 +607,7 @@ OllamaChat.SentimentSaveInterval = 10
 # Prompt template for sentiment analysis
 # Use {message} placeholder for the message to analyze
 # Default: "Analyze the sentiment of this message: \"{message}\". Respond only with: POSITIVE, NEGATIVE, or NEUTRAL."
-OllamaChat.SentimentAnalysisPrompt = "Analyze the sentiment of this message: \"{message}\". Respond only with: POSITIVE, NEGATIVE, or NEUTRAL."
+OllamaChat.SentimentAnalysisPrompt = "How does this message sound to the one it is said to: \"{message}\"? Answer with one word only: FRIENDLY, ROMANTIC, HOSTILE or NEUTRAL."
 
 # Template for including sentiment information in bot prompts
 # Use {player_name} and {sentiment_value} placeholders
@@ -1448,6 +1448,29 @@ OllamaChat.Lore.Enable = 1
 #     Default:     2
 OllamaChat.Lore.MaxTopics = 2
 
+# OllamaChat.Bond.Enable
+#     Description: Conquest of Azeroth. Every bot has a bond with each person it knows: stranger, someone it likes,
+#                  friend, closest friend - or someone it distrusts, dislikes, its enemy. Friendly words and things
+#                  gone through together (hard fights, quests, duels, trades) bring it closer, insults push it away.
+#                  The bot also knows when it last spoke with someone and what about. Needs EnableSentimentTracking
+#                  for how messages sound.
+#     Default:     1
+OllamaChat.Bond.Enable = 1
+
+# OllamaChat.Bond.Romance
+#     Description: A bond can become more than friendship when a person flirts with a bot that is already their
+#                  friend: drawn to them, then beloved. Always tasteful, never explicit. 0: friendship only.
+#     Default:     1
+OllamaChat.Bond.Romance = 1
+
+# OllamaChat.Voice.Enable
+#     Description: Conquest of Azeroth. Other modules hand their lines to the language model, which says them in the
+#                  bot's own words: the trade talk of mod-playerbots-auctions (prices, items and amounts stay exactly
+#                  as they are; if the model loses one, the original line is said) and the ambient lines of the
+#                  Immersion residents. 0: the modules speak their own lines.
+#     Default:     1
+OllamaChat.Voice.Enable = 1
+
 ###############################################################################
 #
 #   OLLAMA CHAT - GAME STATE SNAPSHOT LIMITS
@@ -1859,7 +1882,7 @@ OllamaChat.Memory.PromptTokenBudget = 400
 #        Notes retained per character. When exceeded the least important are
 #        dropped.
 #        Default: 40
-OllamaChat.Memory.MaxPerBot = 40
+OllamaChat.Memory.MaxPerBot = 80
 
 #    OllamaChat.Memory.SaveInterval
 #        Minutes between writes of memories and relationships to the database.

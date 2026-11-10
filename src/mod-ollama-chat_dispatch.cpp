@@ -10,6 +10,7 @@
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_coa.h"
+#include "mod-ollama-chat_bonds.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -39,7 +40,7 @@ namespace
 {
     using Clock = std::chrono::steady_clock;
 
-    enum class TaskType : uint8_t { ChatReply, Sentiment, Condense, Relationship };
+    enum class TaskType : uint8_t { ChatReply, Sentiment, Condense, Relationship, Job };
 
     struct Task
     {
@@ -51,6 +52,9 @@ namespace
         uint64_t    sentimentPlayerGuid = 0;
         std::string sentimentMessage;
         std::string sentimentPrompt;
+
+        // Background job payload.
+        std::function<void()> job;
 
         // Memory / relationship payload.
         uint64_t    memoryBotGuid   = 0;
@@ -159,10 +163,37 @@ namespace
         std::string action;
         std::string text = Generate(task, task.request.prompt, emoteId, action);
 
+        // A line handed over by another module: put its item links back, and fall back to the original where the
+        // model lost something of an exact line. Such a line is always said.
+        if (task.request.voice)
+        {
+            bool keep = !text.empty();
+            for (size_t i = 0; keep && i < task.request.voiceLinks.size(); ++i)
+            {
+                const std::string marker = "[" + std::to_string(i + 1) + "]";
+                const size_t at = text.find(marker);
+                if (at == std::string::npos)
+                    keep = false;
+                else
+                    text.replace(at, marker.size(), task.request.voiceLinks[i]);
+            }
+            if (keep && task.request.voiceExact)
+                keep = Coa_KeepsNumbers(task.request.voiceOriginal, text);
+            if (!keep)
+            {
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} kept its own words: '{}' (model: '{}')",
+                             task.request.botName, task.request.voiceOriginal, text);
+                text = task.request.voiceOriginal;
+                action.clear();
+                emoteId = 0;
+            }
+        }
+
         // Someone spoke to this bot directly: an echo is asked again once, and so is an answer that is nearly the
         // same as the last thing the bot said to someone (small models copy their own last line out of the chat
         // history). Ambient chatter is simply dropped instead; the governor handles its repetition.
-        if (task.request.directAddress)
+        if (task.request.directAddress && !task.request.voice)
         {
             std::string last;
             {
@@ -271,6 +302,10 @@ namespace
                     case TaskType::Relationship:
                         Memory_RunRelationshipUpdate(task.memoryBotGuid, task.memoryOtherGuid,
                                                      task.memoryOtherName, task.memoryPrompt);
+                        break;
+                    case TaskType::Job:
+                        if (task.job)
+                            task.job();
                         break;
                     default:
                         RunChatTask(task);
@@ -435,7 +470,8 @@ namespace
         // the same answer is correct -- suppressing it leaves the asker
         // staring at silence, which reads as the bot being broken rather than
         // as anti-repetition working.
-        if (!directAddress && !c.text.empty() && Governor_IsRepetitive(botGuid, c.request.scopeKey, c.text))
+        if (!c.request.voice && !directAddress && !c.text.empty() &&
+            Governor_IsRepetitive(botGuid, c.request.scopeKey, c.text))
         {
             ++g_droppedGovernor;
             if (g_DebugEnabled)
@@ -445,7 +481,7 @@ namespace
             return;
         }
 
-        if (!Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress))
+        if (!c.request.voice && !Governor_TryConsumeSend(botGuid, c.request.scopeKey, directAddress))
         {
             ++g_droppedGovernor;
             if (g_DebugEnabled)
@@ -462,7 +498,16 @@ namespace
             bot->TextEmote(c.action);
             sent = true;
         }
-        if (!c.text.empty())
+        if (!c.text.empty() && c.request.voice && c.request.source == SRC_WHISPER_LOCAL)
+        {
+            // As the module would have whispered it: in the universal tongue, so a trade across the factions reads.
+            if (Player* to = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid)))
+            {
+                bot->Whisper(c.text, LANG_UNIVERSAL, to);
+                sent = true;
+            }
+        }
+        else if (!c.text.empty())
             sent = RouteMessage(bot, botAI, c, world, channel) || sent;
         if (!sent)
         {
@@ -506,6 +551,8 @@ namespace
             // Counts name mentions and, past a threshold, queues a
             // condensation or relationship revision. World thread.
             Player* target = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
+            if (target && OllamaIsRealPlayer(target))
+                Bond_NoteTalk(bot, target);
             Memory_NoteExchange(c.request.botGuid, c.request.targetGuid,
                                 target ? target->GetName() : std::string(),
                                 c.request.originMessage, remembered);
@@ -736,6 +783,19 @@ namespace
         g_queue.push_back(std::move(task));
         return true;
     }
+}
+
+bool OllamaDispatch_SubmitJob(std::function<void()> job)
+{
+    if (!job)
+        return false;
+    Task task;
+    task.type = TaskType::Job;
+    task.job  = std::move(job);
+    if (!SubmitBackground(std::move(task)))
+        return false;
+    g_queueCv.notify_one();
+    return true;
 }
 
 void OllamaDispatch_SubmitCondensation(uint64_t botGuid, const std::string& prompt)
