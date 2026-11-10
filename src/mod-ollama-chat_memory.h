@@ -44,6 +44,17 @@ struct BotMemoryEntry
     uint8_t     importance = 5;   // 1..10
     uint64_t    createdAt  = 0;   // unix seconds
     uint64_t    aboutGuid  = 0;   // an experience with this person; the bot's own guid for its own doings; 0 for notes
+    uint8_t     kind       = 0;   // MemoryKind
+    uint64_t    lastAccess = 0;   // last time it came up in a prompt (recency decays from here); not stored
+};
+
+// After "Generative Agents" (Park et al., 2023).
+enum MemoryKind : uint8_t
+{
+    MEMORY_EXPERIENCE = 0,        // something that happened, or a note from a conversation
+    MEMORY_REFLECTION = 1,        // what the bot concluded from it
+    MEMORY_GOAL       = 2,        // what the bot wants in life
+    MEMORY_RUMOUR     = 3         // what another bot told it about someone
 };
 
 struct BotRelationship
@@ -76,7 +87,20 @@ std::string Memory_BuildPromptSection(Player* bot, Player* about);
 
 // Conquest of Azeroth: something the bot went through ("You and Chris killed Hogger in Elwynn Forest."), with a
 // person (`aboutGuid`) or alone (its own guid). Kept with its other memories, so the same limits apply. World thread.
-void Memory_AddExperience(uint64_t botGuid, uint64_t aboutGuid, const std::string& text, uint8_t importance);
+void Memory_AddExperience(uint64_t botGuid, uint64_t aboutGuid, const std::string& text, uint8_t importance,
+                          uint8_t kind = MEMORY_EXPERIENCE);
+
+// The memory section of a prompt is chosen on the worker, where there is time to weigh every memory by how recent,
+// how important and how relevant to the moment it is (with an embedding model, by meaning). Prompts carry a marker
+// for it; Memory_ResolveRecall puts the section in its place.
+std::string Memory_RecallMarker(Player* bot, Player* about, const std::string& query);
+std::string Memory_ResolveRecall(const std::string& prompt);   // worker thread
+
+// World thread, every few seconds: reflections and goals for bots that have dealt with real people.
+void Memory_Update();
+
+// Two bots talked: the listener may hear something the teller went through with someone (world thread).
+void Memory_ShareRumour(Player* teller, Player* listener);
 
 // --- worker-side entry points (called from the dispatcher) ----------------
 

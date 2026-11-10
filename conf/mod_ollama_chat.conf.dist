@@ -1480,6 +1480,67 @@ OllamaChat.Voice.Enable = 1
 #     Default:     90
 OllamaChat.Conversation.HoldSeconds = 90
 
+###################################################################################################
+# CONQUEST OF AZEROTH: MEMORY LIKE "GENERATIVE AGENTS"
+#
+# After "Generative Agents: Interactive Simulacra of Human Behavior" (Park et al., 2023): every bot
+# keeps a stream of memories (what it went through, notes from conversations, what it concluded,
+# what it wants, what it heard). For each line it chooses the memories that matter right now by
+# recency, importance and relevance; it reflects on what happened and draws conclusions; it has
+# goals of its own; and bots pass on to each other what they went through with people.
+###################################################################################################
+
+# OllamaChat.Recall.EmbedModel
+#     Description: An Ollama embedding model for choosing memories by meaning instead of by shared words, for
+#                  example "nomic-embed-text" (install it once with: ollama pull nomic-embed-text). Empty: words.
+#                  Only with OllamaChat.Provider = ollama.
+#     Default:     ""
+OllamaChat.Recall.EmbedModel = ""
+
+# OllamaChat.Reflection.Enable
+#     Description: Bots that have dealt with real people think now and then about what they went through: the
+#                  language model asks what is worth thinking about, gathers the memories that bear on it and draws
+#                  up to three conclusions ("You trust Chris with your life."), which become memories themselves.
+#     Default:     1
+OllamaChat.Reflection.Enable = 1
+
+# OllamaChat.Reflection.Threshold
+#     Description: How much has to happen before a bot reflects: the sum of the importance (1-10) of its new
+#                  memories. A hard fight together counts 7, a finished task 2 to 5.
+#     Default:     30
+OllamaChat.Reflection.Threshold = 30
+
+# OllamaChat.Reflection.MinMinutes
+#     Description: At most one reflection per bot in this many minutes.
+#     Default:     30
+OllamaChat.Reflection.MinMinutes = 30
+
+# OllamaChat.Reflection.MaxPerHour
+#     Description: Reflections and goals of all bots together per hour: each takes the language model one or two
+#                  requests in the background. 0: no limit.
+#     Default:     12
+OllamaChat.Reflection.MaxPerHour = 12
+
+# OllamaChat.Goals.Enable
+#     Description: Bots that have dealt with real people get two goals or dreams of their own that fit their
+#                  people and temperament ("You want to save enough for a better sword."), revised as they reflect.
+#                  They talk about them as wishes, never as what they are doing right now - what a bot does is still
+#                  up to Playerbots.
+#     Default:     1
+OllamaChat.Goals.Enable = 1
+
+# OllamaChat.Gossip.Enable
+#     Description: When two bots talk, each may tell the other something it went through with a real person, which
+#                  the other remembers as something it heard. A bot you never met may know you from the stories.
+#     Default:     1
+OllamaChat.Gossip.Enable = 1
+
+# OllamaChat.Gossip.Chance
+#     Description: The chance (percent) that a bot passes something on when two bots talk; at most once in half an
+#                  hour between the same two.
+#     Default:     30
+OllamaChat.Gossip.Chance = 30
+
 ###############################################################################
 #
 #   OLLAMA CHAT - GAME STATE SNAPSHOT LIMITS

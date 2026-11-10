@@ -251,7 +251,17 @@ extern uint32_t g_LoreMaxTopics;
 extern bool     g_BondEnable;
 extern bool     g_BondRomance;
 extern bool     g_VoiceEnable;
-extern uint32_t g_ConversationHoldSeconds;   // a bot in a conversation stays with the person this long after the last line
+extern uint32_t g_ConversationHoldSeconds;
+
+// Conquest of Azeroth, after "Generative Agents" (Park et al., 2023): recall, reflection, goals, rumours.
+extern std::string g_RecallEmbedModel;      // "" = memories chosen by keywords
+extern bool     g_ReflectionEnable;
+extern uint32_t g_ReflectionThreshold;      // sum of importance of new memories before a bot reflects
+extern uint32_t g_ReflectionMinMinutes;
+extern uint32_t g_ReflectionMaxPerHour;     // all bots together
+extern bool     g_GoalsEnable;
+extern bool     g_GossipEnable;
+extern uint32_t g_GossipChance;   // a bot in a conversation stays with the person this long after the last line
 
 extern std::vector<std::string> g_EnvCommentNearbyPlayer;
 extern std::vector<std::string> g_EnvCommentGroupMember;

@@ -199,6 +199,14 @@ bool     g_BondEnable = true;
 bool     g_BondRomance = true;
 bool     g_VoiceEnable = true;
 uint32_t g_ConversationHoldSeconds = 90;
+std::string g_RecallEmbedModel;
+bool     g_ReflectionEnable = true;
+uint32_t g_ReflectionThreshold = 30;
+uint32_t g_ReflectionMinMinutes = 30;
+uint32_t g_ReflectionMaxPerHour = 12;
+bool     g_GoalsEnable = true;
+bool     g_GossipEnable = true;
+uint32_t g_GossipChance = 30;
 
 std::vector<std::string> g_EnvCommentNearbyPlayer;
 std::vector<std::string> g_EnvCommentGroupMember;
@@ -845,6 +853,14 @@ void LoadOllamaChatConfig()
     g_BondRomance                     = sConfigMgr->GetOption<bool>("OllamaChat.Bond.Romance", true);
     g_VoiceEnable                     = sConfigMgr->GetOption<bool>("OllamaChat.Voice.Enable", true);
     g_ConversationHoldSeconds         = std::min<uint32_t>(600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.HoldSeconds", 90));
+    g_RecallEmbedModel                = sConfigMgr->GetOption<std::string>("OllamaChat.Recall.EmbedModel", "");
+    g_ReflectionEnable                = sConfigMgr->GetOption<bool>("OllamaChat.Reflection.Enable", true);
+    g_ReflectionThreshold             = std::max<uint32_t>(5, sConfigMgr->GetOption<uint32_t>("OllamaChat.Reflection.Threshold", 30));
+    g_ReflectionMinMinutes            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Reflection.MinMinutes", 30);
+    g_ReflectionMaxPerHour            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Reflection.MaxPerHour", 12);
+    g_GoalsEnable                     = sConfigMgr->GetOption<bool>("OllamaChat.Goals.Enable", true);
+    g_GossipEnable                    = sConfigMgr->GetOption<bool>("OllamaChat.Gossip.Enable", true);
+    g_GossipChance                    = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Gossip.Chance", 30));
 
     // --- Snapshot limits -------------------------------------------------
     g_SnapshotIncludeSpells           = sConfigMgr->GetOption<bool>("OllamaChat.Snapshot.IncludeSpells", false);

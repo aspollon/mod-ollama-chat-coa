@@ -335,7 +335,7 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
         fmt::arg("actor_name", actorName),
         fmt::arg("sentiment_info", sentimentInfo));
 
-    prompt += Memory_BuildPromptSection(bot, nullptr);
+    prompt += Memory_RecallMarker(bot, nullptr, eventType + " " + eventDetail);
     prompt += Roleplay_BuildVoicePrompt(bot);
     prompt += Expression_BuildGesturePrompt();
     return prompt;

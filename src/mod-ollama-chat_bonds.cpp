@@ -143,7 +143,10 @@ namespace
             "Your temperament: " + GetPersonalityPromptAddition(GetBotPersonality(bot)) + " " +
             OllamaDescribeSituation(bot, to);
         if (to)
+        {
             prompt += Bond_BuildPromptSection(bot, to);
+            prompt += Memory_RecallMarker(bot, to, line);
+        }
         prompt += Roleplay_BuildVoicePrompt(bot);
         if (!context.empty())
             prompt += " " + context;

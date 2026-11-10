@@ -160,9 +160,13 @@ namespace
 
     void RunChatTask(const Task& task)
     {
+        // The memories for this moment are chosen here, on the worker: weighing every one of them by recency,
+        // importance and relevance (with embeddings, a call of its own) is no work for the world thread.
+        const std::string prompt = Memory_ResolveRecall(task.request.prompt);
+
         uint32_t emoteId = 0;
         std::string action;
-        std::string text = Generate(task, task.request.prompt, emoteId, action);
+        std::string text = Generate(task, prompt, emoteId, action);
 
         // A line handed over by another module: put its item links back, and fall back to the original where the
         // model lost something of an exact line. Such a line is always said.
@@ -209,7 +213,7 @@ namespace
                 if (g_DebugEnabled && repeated)
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} repeated itself ('{}'); asking once more.",
                              task.request.botName, text);
-                std::string again = task.request.prompt +
+                std::string again = prompt +
                     " Answer with only the words you say, and say something new: do not repeat anything you said before.";
                 uint32_t emote2 = 0;
                 std::string action2;
@@ -535,6 +539,12 @@ namespace
         if (c.request.targetGuid)
         {
             Player* addressee = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
+            // Two bots talking: each may pass on something it went through with someone (rumours spread).
+            if (addressee && addressee != bot && OllamaIsBotPlayer(addressee))
+            {
+                Memory_ShareRumour(addressee, bot);
+                Memory_ShareRumour(bot, addressee);
+            }
             if (OllamaIsRealPlayer(addressee) && !c.request.voice)
             {
                 Governor_NoteConversation(botGuid, ObjectGuid(c.request.targetGuid),

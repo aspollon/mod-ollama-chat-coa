@@ -2229,7 +2229,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // What this bot remembers, and how it feels about people. Bounded by
     // their own token budgets, so this cannot grow the prompt without limit.
-    prompt += Memory_BuildPromptSection(bot, player);
+    prompt += Memory_RecallMarker(bot, player, playerMessage);
 
     // Race and class as a voice rather than as a stat line.
     prompt += Roleplay_BuildVoicePrompt(bot);

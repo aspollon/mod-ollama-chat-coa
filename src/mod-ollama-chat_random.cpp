@@ -203,7 +203,7 @@ namespace
         prompt += GetSentimentPromptAddition(bot, person);
         prompt += Bond_BuildPromptSection(bot, person);
         prompt += Lore_BuildSection(bot, person, std::string());
-        prompt += Memory_BuildPromptSection(bot, person);
+        prompt += Memory_RecallMarker(bot, person, std::string());
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += " Speak to " + std::string(person->GetName()) + " first, by name, the way someone in your situation "
                   "would: a question, a request for help, a warning, an offer, a remark about what you are doing or "
@@ -270,7 +270,7 @@ namespace
 
         prompt += " " + OllamaDescribeSituation(bot, nullptr);
         prompt += Lore_BuildSection(bot, nullptr, environmentInfo);
-        prompt += Memory_BuildPromptSection(bot, nullptr);
+        prompt += Memory_RecallMarker(bot, nullptr, environmentInfo);
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += Expression_BuildGesturePrompt();
 
@@ -306,6 +306,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         Governor_Update();
         Topics_Update();
         Bond_Update();
+        Memory_Update();
     }
     else
     {
