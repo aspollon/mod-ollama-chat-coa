@@ -13,6 +13,12 @@
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
 
+// The session knows a headless bot under two names: IsHeadless() in the Playerbot core, IsHeadlessBot() in the
+// Conquest of Azeroth core. Whichever the core has is used; with neither, the AI lookup below decides.
+template <class S> static auto OllamaSessionHeadless(S* s, int) -> decltype(s->IsHeadless()) { return s->IsHeadless(); }
+template <class S> static auto OllamaSessionHeadless(S* s, long) -> decltype(s->IsHeadlessBot()) { return s->IsHeadlessBot(); }
+template <class S> static bool OllamaSessionHeadless(S*, ...) { return false; }
+
 bool OllamaIsBotPlayer(Player* player)
 {
     if (!player)
@@ -21,7 +27,7 @@ bool OllamaIsBotPlayer(Player* player)
     // Correct from session construction, unlike the AI lookup below.
     if (WorldSession* session = player->GetSession())
     {
-        if (session->IsHeadless())
+        if (OllamaSessionHeadless(session, 0))
             return true;
     }
 
