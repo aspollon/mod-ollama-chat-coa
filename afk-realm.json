@@ -90,6 +90,24 @@
       "key": "OllamaChat.ThinkMode",
       "value": "\"off\"",
       "why": "Replies without the model's long thinking first: a line of chat comes in seconds, not half a minute, and no thinking leaks into chat."
+    },
+    {
+      "file": "mod_playerbots_auctions.conf",
+      "key": "PlayerbotsAuctions.Chatter.Enable",
+      "value": "0",
+      "why": "The auction-house bots' prewritten chatter in the channels; the language model talks instead. Their trading by chat (WTS/WTB, deals, meeting to trade) stays on."
+    },
+    {
+      "file": "mod_playerbots_immersion.conf",
+      "key": "CityLife.Custom.Conversations.Enable",
+      "value": "0",
+      "why": "Immersion's prewritten conversations between city bots; the bots now talk to each other through the language model."
+    },
+    {
+      "file": "mod_playerbots_immersion.conf",
+      "key": "PvPLife.BotChat.Enable",
+      "value": "0",
+      "why": "Immersion's prewritten PvP yells; bots comment on kills and fights through the language model."
     }
   ]
 }
