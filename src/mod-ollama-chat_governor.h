@@ -3,6 +3,7 @@
 
 #include "ObjectGuid.h"
 #include <string>
+#include <vector>
 #include <cstdint>
 
 // --------------------------------------------------------------------------
@@ -57,6 +58,11 @@ bool Governor_InConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
 // name or target; runs out after ConversationWindowSeconds of silence.
 void Governor_SetPartner(ObjectGuid playerGuid, ObjectGuid botGuid);
 ObjectGuid Governor_GetPartner(ObjectGuid playerGuid);
+
+// Every open conversation: person, bot, seconds since the last line. And the end of one ("bye").
+struct GovernorPartner { ObjectGuid player; ObjectGuid bot; double idleSeconds; };
+std::vector<GovernorPartner> Governor_Partners();
+void Governor_EndConversation(ObjectGuid playerGuid);
 
 // --- cooldowns and rate limits -------------------------------------------
 

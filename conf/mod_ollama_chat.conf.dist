@@ -1471,6 +1471,15 @@ OllamaChat.Bond.Romance = 1
 #     Default:     1
 OllamaChat.Voice.Enable = 1
 
+# OllamaChat.Conversation.HoldSeconds
+#     Description: Conquest of Azeroth. A bot talking with a person stays with them until this many seconds after the
+#                  last line: it stops its errands, turns to the person and follows a few steps when they walk on (an
+#                  Immersion resident keeps its place instead). It lets go when the person says goodbye and the bot
+#                  has answered, when the person walks far away, and always in combat, dungeons, raids, battlegrounds
+#                  and duels, and for bots in the person's group. 0: bots go about their business while talking.
+#     Default:     90
+OllamaChat.Conversation.HoldSeconds = 90
+
 ###############################################################################
 #
 #   OLLAMA CHAT - GAME STATE SNAPSHOT LIMITS

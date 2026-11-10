@@ -251,6 +251,7 @@ extern uint32_t g_LoreMaxTopics;
 extern bool     g_BondEnable;
 extern bool     g_BondRomance;
 extern bool     g_VoiceEnable;
+extern uint32_t g_ConversationHoldSeconds;   // a bot in a conversation stays with the person this long after the last line
 
 extern std::vector<std::string> g_EnvCommentNearbyPlayer;
 extern std::vector<std::string> g_EnvCommentGroupMember;

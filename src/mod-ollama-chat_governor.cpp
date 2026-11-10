@@ -335,6 +335,29 @@ ObjectGuid Governor_GetPartner(ObjectGuid playerGuid)
     return ObjectGuid(it->second.first);
 }
 
+std::vector<GovernorPartner> Governor_Partners()
+{
+    std::vector<GovernorPartner> out;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const auto now = Clock::now();
+    for (const auto& [player, partner] : g_partners)
+        out.push_back({ ObjectGuid(player), ObjectGuid(partner.first), SecondsSince(partner.second, now) });
+    return out;
+}
+
+void Governor_EndConversation(ObjectGuid playerGuid)
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto it = g_partners.find(playerGuid.GetRawValue());
+    if (it == g_partners.end())
+        return;
+    // The bot no longer counts as in conversation with this person either.
+    auto botIt = g_bots.find(it->second.first);
+    if (botIt != g_bots.end())
+        botIt->second.conversations.erase(playerGuid.GetRawValue());
+    g_partners.erase(it);
+}
+
 void Governor_NoteConversation(ObjectGuid botGuid, ObjectGuid playerGuid,
                                const std::string& scopeKey)
 {

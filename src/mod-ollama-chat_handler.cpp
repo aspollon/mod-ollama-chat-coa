@@ -2,6 +2,7 @@
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_lore.h"
 #include "mod-ollama-chat_bonds.h"
+#include "mod-ollama-chat_presence.h"
 #include "Language.h"
 #include "Player.h"
 #include "Chat.h"
@@ -1232,6 +1233,10 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
              
     PlayerbotAI* senderAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
     bool senderIsBot = (senderAI && senderAI->IsBotAI());
+
+    // A goodbye ends the conversation once the bot has answered it; until then the bot stays (Conquest of Azeroth).
+    if (!senderIsBot)
+        Presence_NoteMessage(player, msg);
 
     // --- conversation governor -------------------------------------------
     // One key per conversation space so cooldowns, rate limits and repetition

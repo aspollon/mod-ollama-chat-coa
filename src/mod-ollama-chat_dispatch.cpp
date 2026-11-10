@@ -11,6 +11,7 @@
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_bonds.h"
+#include "mod-ollama-chat_presence.h"
 
 #include "CellImpl.h"
 #include "Channel.h"
@@ -534,9 +535,12 @@ namespace
         if (c.request.targetGuid)
         {
             Player* addressee = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
-            if (OllamaIsRealPlayer(addressee))
+            if (OllamaIsRealPlayer(addressee) && !c.request.voice)
+            {
                 Governor_NoteConversation(botGuid, ObjectGuid(c.request.targetGuid),
                                           c.request.scopeKey);
+                Presence_AfterReply(bot, addressee);
+            }
         }
 
         // Body language. Safe here and only here: this is the world thread.
