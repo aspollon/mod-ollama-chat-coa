@@ -25,10 +25,10 @@ index b6bf264f..c8676845 100644
  AiPlayerbot.CoaBotSurname = 1
  
 diff --git a/src/Ai/Class/Coa/CoaBotNames.cpp b/src/Ai/Class/Coa/CoaBotNames.cpp
-index 1fc7d3dc..d14e87f4 100644
+index 1fc7d3dc..69faa4f4 100644
 --- a/src/Ai/Class/Coa/CoaBotNames.cpp
 +++ b/src/Ai/Class/Coa/CoaBotNames.cpp
-@@ -9,29 +9,89 @@
+@@ -9,29 +9,130 @@
  #include "DatabaseEnv.h"
  #include "Log.h"
  #include "ObjectGuid.h"
@@ -50,25 +50,41 @@ index 1fc7d3dc..d14e87f4 100644
 +// AiPlayerbot.CoaBotSurname: 0 the first name alone, 1 the surname "Bot" (a bot is told from a player at a
 +// glance), 2 a surname of the bot's people, drawn from its first name so it never changes.
 +constexpr char const* BotSurname = "Bot";
- 
--bool HasSurname(std::string const& name)
-+std::vector<char const*> const& SurnamesFor(uint8 race)
- {
--    std::string const suffix(Surname);
--    return name.size() > suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
-+    static std::vector<char const*> const human = { "Ashford", "Blackwood", "Brightwater", "Caldwell", "Thornton", "Hargrove", "Whitmore", "Ravencroft", "Stonebridge", "Fairweather", "Holloway", "Lockridge", "Westbrook", "Hawthorne", "Wolfe", "Redmond", "Brookshire", "Coldwater", "Pennington", "Marlowe" };
-+    static std::vector<char const*> const dwarf = { "Stonehammer", "Ironbrew", "Coppervein", "Goldbeard", "Flintheart", "Deepdelver", "Stoutbrew", "Granitehand", "Battleaxe", "Coalfist", "Emberforge", "Rockjaw", "Silveranvil", "Grimbeard", "Barrelbelly", "Fireforge", "Deepvein", "Ironfist", "Mountainson", "Anvilheart" };
-+    static std::vector<char const*> const gnome = { "Cogspinner", "Sparkwrench", "Fizzlebolt", "Gizmobolt", "Tinkerfuse", "Copperpot", "Sprocketwhiz", "Wobblegear", "Fusewick", "Boltbuckle", "Spannerspin", "Gadgetwick", "Clickclack", "Nittlebit", "Sparkcrank", "Whirlygig" };
-+    static std::vector<char const*> const nightElf = { "Moonwhisper", "Starbreeze", "Nightsong", "Shadowleaf", "Silverbough", "Duskwind", "Starfall", "Swiftarrow", "Mistwalker", "Windsong", "Thornbough", "Earthsong", "Nightbloom", "Sagewhisper", "Ravenfeather", "Leafshadow" };
-+    static std::vector<char const*> const highElf = { "Dawnblade", "Goldenleaf", "Brightsong", "Firemane", "Embersong", "Lightwhisper", "Dawnstar", "Sunweaver", "Goldmantle", "Starflare", "Fairwind", "Ashbloom", "Flameheart", "Dawnseeker", "Spellsong", "Sunbright" };
-+    static std::vector<char const*> const orc = { "Bloodfist", "Skullcrush", "Ironjaw", "Stonefang", "Axebreaker", "Bonegrinder", "Wolfrider", "Grimtusk", "Blackmaw", "Ragefang", "Skullcleave", "Bladefist", "Rockfist", "Ashclaw", "Warmaul", "Ironhowl" };
-+    static std::vector<char const*> const troll = { "Shadowtusk", "Hexwalker", "Mojomaker", "Spiritfang", "Raptorbane", "Snaketongue", "Bonecharm", "Junglestride", "Tigerfang", "Voodoohand", "Mossmane", "Batrider", "Spearcaller", "Darkjuju" };
-+    static std::vector<char const*> const tauren = { "Thunderhoof", "Earthsong", "Highmane", "Skyhorn", "Stormhorn", "Ragetotem", "Wildmane", "Cloudhoof", "Ironhide", "Longstride", "Stonebreaker", "Riverwind", "Eaglemane", "Dawnhoof", "Grasswalker", "Mossback" };
-+    static std::vector<char const*> const undead = { "Ashgrave", "Mournwood", "Blackmoor", "Coldhollow", "Duskfall", "Graveborn", "Hollowell", "Gravesend", "Rotwell", "Sorrowmere", "Ravenhill", "Wormwood", "Cinderwick", "Bleakmoor", "Ashwhisper", "Coldmarrow" };
-+    static std::vector<char const*> const draenei = { "Lightward", "Starseeker", "Crystalsong", "Dawnveil", "Truehammer", "Sunhallow", "Azurewind", "Hopebringer", "Starmend", "Lightsworn", "Velenhart", "Shimmerveil" };
-+    static std::vector<char const*> const goblin = { "Fizzlecash", "Gearsnap", "Quickfuse", "Coinpurse", "Greasegrip", "Sparkgrin", "Bigsprocket", "Fastcash", "Goldtooth", "Scrapspark", "Boomgrin", "Rustbolt" };
-+    static std::vector<char const*> const pandaren = { "Brewbelly", "Jadepaw", "Silkpaw", "Mistbrew", "Peachblossom", "Thunderpaw", "Cloudstep", "Jadewind", "Softpaw", "Riverbrew", "Lotusleaf", "Plumfoot" };
-+    static std::vector<char const*> const vulpera = { "Sandtail", "Dunefur", "Duststep", "Brightear", "Quicktail", "Sunwhisker", "Junkpaw", "Wanderpaw", "Sandwhisker", "Dustytail", "Scrapfinder" };
++
++// A surname of a people is two parts ("Stone" + "hammer"): a few hundred per people, so they rarely repeat.
++struct Family
++{
++    std::vector<char const*> first, second;
++};
++
++Family const& FamilyFor(uint8 race)
++{
++    static Family const human = { { "Ash", "Black", "Bright", "Cald", "Thorn", "Har", "White", "Raven", "Stone", "Fair", "Hollow", "Lock", "West", "Haw", "Red", "Brook", "Cold", "Green", "Oak", "Wynd", "Moss", "Hart", "Elm", "Grey" },
++        { "ford", "wood", "water", "well", "ton", "grove", "more", "croft", "bridge", "weather", "way", "ridge", "brook", "thorne", "mond", "shire", "field", "ley", "wick", "worth", "hall", "gate", "stead", "mere" } };
++    static Family const dwarf = { { "Stone", "Iron", "Copper", "Gold", "Flint", "Deep", "Stout", "Granite", "Battle", "Coal", "Ember", "Rock", "Silver", "Grim", "Barrel", "Fire", "Thunder", "Anvil", "Hammer", "Frost", "Mithril", "Steel", "Oak", "Ale" },
++        { "hammer", "brew", "vein", "beard", "heart", "delver", "hand", "axe", "fist", "forge", "jaw", "anvil", "belly", "mantle", "shield", "helm", "mug", "braid", "back", "boot", "pick", "keg" } };
++    static Family const gnome = { { "Cog", "Spark", "Fizzle", "Gizmo", "Tinker", "Copper", "Sprocket", "Wobble", "Fuse", "Bolt", "Spanner", "Gadget", "Click", "Nittle", "Whirl", "Gear", "Wizzle", "Sputter", "Twiddle", "Pepper" },
++        { "spinner", "wrench", "bolt", "fuse", "pot", "whiz", "gear", "wick", "buckle", "spin", "clack", "bit", "crank", "gig", "sprocket", "top", "bang", "nozzle", "dash", "pocket" } };
++    static Family const nightElf = { { "Moon", "Star", "Night", "Shadow", "Silver", "Dusk", "Swift", "Mist", "Wind", "Thorn", "Earth", "Sage", "Raven", "Leaf", "Dream", "Glade", "Owl", "Ever", "Sky", "Fern" },
++        { "whisper", "breeze", "song", "leaf", "bough", "wind", "fall", "arrow", "walker", "bloom", "feather", "shade", "strider", "glow", "weaver", "brook", "root", "grove", "petal" } };
++    static Family const highElf = { { "Dawn", "Golden", "Bright", "Fire", "Ember", "Light", "Sun", "Gold", "Star", "Fair", "Ash", "Flame", "Spell", "Silver", "Crimson", "Blaze", "Ruby", "Amber" },
++        { "blade", "leaf", "song", "mane", "whisper", "star", "weaver", "mantle", "flare", "wind", "bloom", "heart", "seeker", "bright", "glow", "thread", "crest", "spire", "fall", "veil" } };
++    static Family const orc = { { "Blood", "Skull", "Iron", "Stone", "Axe", "Bone", "Wolf", "Grim", "Black", "Rage", "Blade", "Rock", "Ash", "War", "Thunder", "Gore", "Storm", "Fang", "Steel", "Dark" },
++        { "fist", "crush", "jaw", "fang", "breaker", "grinder", "rider", "tusk", "maw", "cleave", "claw", "maul", "howl", "hide", "eye", "spine", "ripper", "axe", "scar" } };
++    static Family const troll = { { "Shadow", "Hex", "Mojo", "Spirit", "Raptor", "Snake", "Bone", "Jungle", "Tiger", "Voodoo", "Moss", "Bat", "Spear", "Dark", "Blood", "Witch", "Juju", "Grave", "Wild" },
++        { "tusk", "walker", "maker", "fang", "bane", "tongue", "charm", "stride", "hand", "mane", "rider", "caller", "juju", "scalp", "spear", "eye", "dancer", "skull", "mask", "totem" } };
++    static Family const tauren = { { "Thunder", "Earth", "High", "Sky", "Storm", "Rage", "Wild", "Cloud", "Iron", "Long", "Stone", "River", "Eagle", "Dawn", "Grass", "Moss", "Plain", "Wind", "Sun", "Mesa", "Grey", "Spirit" },
++        { "hoof", "song", "mane", "horn", "totem", "hide", "stride", "breaker", "walker", "back", "hunter", "call", "drum", "bluff", "plume", "ram", "tail", "born" } };
++    static Family const undead = { { "Ash", "Mourn", "Black", "Cold", "Dusk", "Grave", "Hollow", "Rot", "Sorrow", "Raven", "Worm", "Cinder", "Bleak", "Grim", "Gloom", "Night", "Crow", "Bone", "Pale", "Wither" },
++        { "grave", "wood", "moor", "hollow", "fall", "born", "well", "send", "mere", "hill", "wick", "whisper", "marrow", "shroud", "rot", "gate", "ward", "field", "vale", "thorn" } };
++    static Family const draenei = { { "Light", "Star", "Crystal", "Dawn", "True", "Sun", "Azure", "Hope", "Shimmer", "Gleam", "Bright", "Holy", "Faith", "Ever", "Sky", "Silver" },
++        { "ward", "seeker", "song", "veil", "hammer", "hallow", "wind", "bringer", "mend", "sworn", "light", "gaze", "forge", "spire", "keeper", "heart", "shard", "grace" } };
++    static Family const goblin = { { "Fizzle", "Gear", "Quick", "Coin", "Grease", "Spark", "Big", "Fast", "Gold", "Scrap", "Boom", "Rust", "Cash", "Gizzle", "Nitro", "Bilge", "Zap", "Tinsel" },
++        { "cash", "snap", "fuse", "purse", "grip", "grin", "sprocket", "tooth", "spark", "bolt", "wrench", "cog", "bang", "fizz", "nose", "buck", "haggle", "deal", "flash", "pocket" } };
++    static Family const pandaren = { { "Brew", "Jade", "Silk", "Mist", "Peach", "Thunder", "Cloud", "Soft", "River", "Lotus", "Plum", "White", "Bamboo", "Tea", "Rice", "Ember", "Stone", "Willow" },
++        { "belly", "paw", "brew", "blossom", "step", "wind", "leaf", "foot", "peak", "song", "whisker", "stripe", "field", "cup", "kettle", "drift" } };
++    static Family const vulpera = { { "Sand", "Dune", "Dust", "Bright", "Quick", "Sun", "Junk", "Wander", "Scrap", "Sly", "Copper", "Red", "Tumble", "Thistle", "Rust" },
++        { "tail", "fur", "step", "ear", "whisker", "paw", "finder", "snout", "trot", "tuft", "scent", "sniff", "nose", "dash" } };
 +
 +    ChrRacesEntry const* entry = sChrRacesStore.LookupEntry(race);
 +    std::string name = entry && entry->name[0] ? entry->name[0] : "";
@@ -89,6 +105,35 @@ index 1fc7d3dc..d14e87f4 100644
 +    return human;
 +}
 +
++// Names of the lore and of places a bot should not carry.
++bool Taken(std::string const& surname)
++{
++    static std::unordered_set<std::string> const lore = { "Bladefist", "Shadowsong", "Whisperwind", "Ironforge",
++        "Stormwind", "Goldshire", "Thunderbrew", "Bloodhoof", "Grimtotem", "Bloodscalp", "Thunderhorn", "Skyhorn",
++        "Stonehoof", "Silvermoon", "Moonglade", "Ravencrest" };
++    return lore.count(surname) != 0;
++}
+ 
+-bool HasSurname(std::string const& name)
++std::string SurnameFor(std::string const& first, uint8 race)
+ {
+-    std::string const suffix(Surname);
+-    return name.size() > suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
++    uint32 h = 2166136261u;
++    for (unsigned char c : first)
++        h = (h ^ static_cast<uint32>(std::tolower(c))) * 16777619u;
++    Family const& family = FamilyFor(race);
++    size_t const a = family.first.size(), b = family.second.size(), all = a * b;
++    for (size_t k = 0; k < all; ++k)
++    {
++        size_t const i = (h + k * 7919) % all;
++        std::string surname = std::string(family.first[i % a]) + family.second[i / a];
++        if (surname.size() <= 12 && !Taken(surname))
++            return surname;
++    }
++    return BotSurname;
++}
++
 +std::string FirstName(std::string const& name)
 +{
 +    size_t space = name.find(' ');
@@ -104,11 +149,7 @@ index 1fc7d3dc..d14e87f4 100644
 +            return first;
 +        case 2:
 +        {
-+            uint32 h = 2166136261u;
-+            for (unsigned char c : first)
-+                h = (h ^ static_cast<uint32>(std::tolower(c))) * 16777619u;
-+            std::vector<char const*> const& list = SurnamesFor(race);
-+            return first + " " + list[h % list.size()];
++            return first + " " + SurnameFor(first, race);
 +        }
 +        default:
 +            return first + " " + BotSurname;
@@ -127,7 +168,7 @@ index 1fc7d3dc..d14e87f4 100644
  }
  
  void ApplyCoaBotSurnames()
-@@ -43,8 +103,6 @@ void ApplyCoaBotSurnames()
+@@ -43,8 +144,6 @@ void ApplyCoaBotSurnames()
          return;
      applied = true;
  
@@ -136,7 +177,7 @@ index 1fc7d3dc..d14e87f4 100644
      std::unordered_set<uint32> accounts;
      if (QueryResult result = LoginDatabase.Query("SELECT id FROM account WHERE username LIKE '{}%'",
                                                   sPlayerbotAIConfig.randomBotAccountPrefix))
-@@ -54,14 +112,15 @@ void ApplyCoaBotSurnames()
+@@ -54,14 +153,15 @@ void ApplyCoaBotSurnames()
      if (accounts.empty())
          return;
  
@@ -155,7 +196,7 @@ index 1fc7d3dc..d14e87f4 100644
              names.insert(rows.back().name);
          } while (result->NextRow());
  
-@@ -72,11 +131,10 @@ void ApplyCoaBotSurnames()
+@@ -72,11 +172,10 @@ void ApplyCoaBotSurnames()
          if (!accounts.count(row.account))
              continue;
  
@@ -169,7 +210,7 @@ index 1fc7d3dc..d14e87f4 100644
          // A player may hold the name already: that bot keeps its own.
          if (names.count(renamedTo))
          {
-@@ -94,6 +152,6 @@ void ApplyCoaBotSurnames()
+@@ -94,6 +193,6 @@ void ApplyCoaBotSurnames()
      CharacterDatabase.CommitTransaction(trans);
  
      if (renamed || skipped)

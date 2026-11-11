@@ -627,4 +627,4 @@ The client add-on `client/AddOns/AFKRoleplay` (AFK Realm installs it with the mo
 
 ## Bot surnames
 
-With AFK Realm the patch `patches/playerbots-bot-surnames.patch` lets `AiPlayerbot.CoaBotSurname` (playerbots.conf) choose: `1` the surname "Bot", `2` a surname of the bot's people (Stonehammer, Moonwhisper ...), `0` none. Applied at the next start.
+With AFK Realm the patch `patches/playerbots-bot-surnames.patch` lets `AiPlayerbot.CoaBotSurname` (playerbots.conf) choose: `1` the surname "Bot", `2` a surname of the bot's people, put together from two parts (Stone+hammer, Moon+whisper: 200 to 570 per people), `0` none. Applied at the next start.
