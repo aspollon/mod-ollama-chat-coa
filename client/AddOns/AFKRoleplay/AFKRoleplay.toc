@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: AFK Roleplay
+## Notes: Roleplay sheets: write your own, read the bots' (written by the realm's language model). Bots read yours when they talk to you. Needs mod-ollama-chat-coa on the realm.
+## Author: aspollon
+## Version: 1.0
+## SavedVariablesPerCharacter: AFKRoleplayDB
+AFKRoleplay.lua

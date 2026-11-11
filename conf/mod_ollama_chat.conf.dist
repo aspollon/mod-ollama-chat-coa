@@ -2132,3 +2132,41 @@ OllamaChat.PresencePenalty = -1000
 #   Default: -1000
 OllamaChat.FrequencyPenalty = -1000
 
+###################################################################################################
+# ROLEPLAY SHEETS (client add-on AFKRoleplay)
+#
+#    Players write a sheet for their character (name, title, age, home, looks, manner, history,
+#    right now) in the add-on; bots get one written by the language model. Bots read both when they
+#    talk: a bot keeps to its own sheet and knows what the player shows of themselves.
+#
+# OllamaChat.RP.Enable
+#     Description: Bots get a sheet when someone opens it (the add-on shows "being written" until it
+#                  is there). Players' sheets are always kept.
+#     Default:     1
+OllamaChat.RP.Enable = 1
+
+# OllamaChat.RP.Pregenerate
+#     Description: While the language model has nothing else to do, it writes sheets ahead for bots in
+#                  a real player's group, then for bots near one, so a sheet is mostly ready when opened.
+#     Default:     1
+OllamaChat.RP.Pregenerate = 1
+
+# OllamaChat.RP.PregenerateRange
+#     Description: How near a real player a bot must be for its sheet to be written ahead (yards).
+#     Default:     40
+OllamaChat.RP.PregenerateRange = 40
+
+# OllamaChat.RP.PregeneratePerHour
+#     Description: At most this many sheets written ahead per hour.
+#     Default:     20
+OllamaChat.RP.PregeneratePerHour = 20
+
+# OllamaChat.RP.UseSheetsInChat
+#     Description: Bots read the sheets when they talk (theirs and the player's).
+#     Default:     1
+OllamaChat.RP.UseSheetsInChat = 1
+
+# OllamaChat.RP.Language
+#     Description: The language bots' sheets are written in, for example "German". Empty: English.
+#     Default:     ""
+OllamaChat.RP.Language = ""

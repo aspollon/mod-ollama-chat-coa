@@ -624,7 +624,7 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
     return headers;
 }
 
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind)
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t maxTokens)
 {
     OllamaApiResult result;
 
@@ -635,6 +635,8 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind)
     }
 
     OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+    if (maxTokens > 0)
+        cfg.numPredict = maxTokens;   // a roleplay sheet is longer than a chat line
 
     // The system prompt tells the model how a character speaks. Sentiment, memory and relationship requests are
     // judgements in a fixed format, not speech, and that prompt would only get in their way.

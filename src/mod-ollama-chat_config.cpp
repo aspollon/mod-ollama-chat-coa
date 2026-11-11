@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_config.h"
+#include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_handler.h"
@@ -956,6 +957,7 @@ void LoadOllamaChatConfig()
     // the g_Ollama* globals directly -- reassigning those here would free the
     // buffers under a worker mid-request.
     OllamaConfig_Publish();
+    Rp_LoadConfig();
 
     LoadPersonalityTemplatesFromDB();
 

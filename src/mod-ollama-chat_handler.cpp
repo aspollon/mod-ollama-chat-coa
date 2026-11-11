@@ -32,6 +32,7 @@
 #include <ctime>
 #include "DatabaseEnv.h"
 #include "mod-ollama-chat_handler.h"
+#include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_config.h"
@@ -2233,6 +2234,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
 
     // Race and class as a voice rather than as a stat line.
     prompt += Roleplay_BuildVoicePrompt(bot);
+
+    // The bot's roleplay sheet, and what the player wrote on theirs (AFKRoleplay).
+    prompt += Rp_PromptSection(bot, player);
 
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text.

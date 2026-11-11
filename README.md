@@ -620,3 +620,11 @@ This module is released under the GNU GPL v3 license, consistent with AzerothCor
 Developed by Dustin Hendrickson
 
 Pull requests, bug reports, and feature suggestions are welcome. Please adhere to AzerothCore's coding standards and guidelines when submitting contributions.
+
+## Roleplay sheets (AFKRoleplay)
+
+The client add-on `client/AddOns/AFKRoleplay` (AFK Realm installs it with the module) shows a roleplay sheet for every character: `/rp` or the **RP** button on the target frame or the inspect window. Write your own with `/rp edit`; bots get theirs written by the language model (ahead of time while it is idle, else when opened). Bots read both when they talk. Settings: `OllamaChat.RP.*`. Details: `docs/2026-11-11-roleplay-sheets.md`.
+
+## Bot surnames
+
+With AFK Realm the patch `patches/playerbots-bot-surnames.patch` lets `AiPlayerbot.CoaBotSurname` (playerbots.conf) choose: `1` the surname "Bot", `2` a surname of the bot's people (Stonehammer, Moonwhisper ...), `0` none. Applied at the next start.

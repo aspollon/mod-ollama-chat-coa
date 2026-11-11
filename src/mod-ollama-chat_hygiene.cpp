@@ -26,6 +26,7 @@ namespace
             { "mod_ollama_chat_bot_player_sentiments", "player_guid" },
             { "mod_ollama_chat_bonds",                 "bot_guid" },
             { "mod_ollama_chat_bonds",                 "other_guid" },
+            { "mod_ollama_chat_rp",                    "guid" },
         };
         return columns;
     }
@@ -43,7 +44,7 @@ void Hygiene_Run()
     // Guids whose character is gone, or is not the one it was.
     const std::string changed =
         "SELECT i.guid FROM mod_ollama_chat_identity i LEFT JOIN characters c ON c.guid = i.guid "
-        "WHERE c.guid IS NULL OR c.name <> i.name OR c.race <> i.race OR c.class <> i.class OR c.gender <> i.gender";
+        "WHERE c.guid IS NULL OR SUBSTRING_INDEX(c.name, ' ', 1) <> SUBSTRING_INDEX(i.name, ' ', 1) OR c.race <> i.race OR c.class <> i.class OR c.gender <> i.gender";
 
     const uint64_t replaced = Count("SELECT COUNT(*) FROM (" + changed + ") AS x");
 
@@ -58,7 +59,7 @@ void Hygiene_Run()
 
     CharacterDatabase.DirectExecute(
         "DELETE i FROM mod_ollama_chat_identity i LEFT JOIN characters c ON c.guid = i.guid "
-        "WHERE c.guid IS NULL OR c.name <> i.name OR c.race <> i.race OR c.class <> i.class OR c.gender <> i.gender");
+        "WHERE c.guid IS NULL OR SUBSTRING_INDEX(c.name, ' ', 1) <> SUBSTRING_INDEX(i.name, ' ', 1) OR c.race <> i.race OR c.class <> i.class OR c.gender <> i.gender");
 
     // Remember who every guid with something stored belongs to now.
     std::string all;

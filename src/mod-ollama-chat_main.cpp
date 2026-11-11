@@ -5,6 +5,7 @@
 #include "mod-ollama-chat_command.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_rag.h"
+#include "mod-ollama-chat_rp.h"
 #include "Log.h"
 
 void Addmod_ollama_chat_coaScripts()
@@ -35,4 +36,7 @@ void Addmod_ollama_chat_coaScripts()
     new ChatOnEmote();
 
     new OllamaChatConfigCommand();
+
+    // Roleplay sheets for the AFKRoleplay add-on.
+    new OllamaRpChat();
 }

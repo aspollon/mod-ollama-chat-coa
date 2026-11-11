@@ -1,0 +1,242 @@
+diff --git a/conf/playerbots.conf.dist b/conf/playerbots.conf.dist
+index b6bf264f..c8676845 100644
+--- a/conf/playerbots.conf.dist
++++ b/conf/playerbots.conf.dist
+@@ -2439,13 +2439,14 @@ AiPlayerbot.CoaHealsExcluded = "Nanobot Reconstruction"
+ 
+ #
+ #    AiPlayerbot.CoaBotSurname
+-#        Description: Random bots carry the surname "Bot" ("Kegarink Bot"), so players tell them from
+-#                     real players at a glance: nameplates, tooltips, chat, /who.
+-#                     Applied at the next start: turned off, the bots take their own names back.
+-#                     Needs a client that shows two-word names (CoA client revision 8 or later).
+-#                     To whisper a bot by typing its name: /w "Kegarink Bot" hello
+-#        Default:     1 - on
+-#                     0 - off
++#        Description: The surname of the random bots. "Bot" ("Kegarink Bot") tells them from real players at
++#                     a glance; a surname of their people ("Kegarink Stonehammer") suits roleplay; or none.
++#                     Applied at the next start: every random bot is renamed to fit (a name a player holds
++#                     already stays as it was). Needs a client that shows two-word names (CoA client revision
++#                     8 or later). To whisper a bot by typing its name: /w "Kegarink Bot" hello
++#        Default:     1 - the surname "Bot"
++#                     2 - a surname of the bot's people (Dwarf: Stonehammer, Night Elf: Moonwhisper ...)
++#                     0 - no surname
+ 
+ AiPlayerbot.CoaBotSurname = 1
+ 
+diff --git a/src/Ai/Class/Coa/CoaBotNames.cpp b/src/Ai/Class/Coa/CoaBotNames.cpp
+index 1fc7d3dc..d14e87f4 100644
+--- a/src/Ai/Class/Coa/CoaBotNames.cpp
++++ b/src/Ai/Class/Coa/CoaBotNames.cpp
+@@ -9,29 +9,89 @@
+ #include "DatabaseEnv.h"
+ #include "Log.h"
+ #include "ObjectGuid.h"
++#include "DBCStores.h"
+ #include "PlayerbotAIConfig.h"
+ 
++#include <algorithm>
++#include <cctype>
++
+ #include <unordered_set>
+ #include <vector>
+ 
+ namespace
+ {
+-// Conquest of Azeroth names take two words, a first name and a surname (client revision 8): the
+-// surname tells a bot from a player at a glance, on its nameplate, in chat and in /who.
+-constexpr char const* Surname = " Bot";
++// Conquest of Azeroth names take two words, a first name and a surname (client revision 8).
++// AiPlayerbot.CoaBotSurname: 0 the first name alone, 1 the surname "Bot" (a bot is told from a player at a
++// glance), 2 a surname of the bot's people, drawn from its first name so it never changes.
++constexpr char const* BotSurname = "Bot";
+ 
+-bool HasSurname(std::string const& name)
++std::vector<char const*> const& SurnamesFor(uint8 race)
+ {
+-    std::string const suffix(Surname);
+-    return name.size() > suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
++    static std::vector<char const*> const human = { "Ashford", "Blackwood", "Brightwater", "Caldwell", "Thornton", "Hargrove", "Whitmore", "Ravencroft", "Stonebridge", "Fairweather", "Holloway", "Lockridge", "Westbrook", "Hawthorne", "Wolfe", "Redmond", "Brookshire", "Coldwater", "Pennington", "Marlowe" };
++    static std::vector<char const*> const dwarf = { "Stonehammer", "Ironbrew", "Coppervein", "Goldbeard", "Flintheart", "Deepdelver", "Stoutbrew", "Granitehand", "Battleaxe", "Coalfist", "Emberforge", "Rockjaw", "Silveranvil", "Grimbeard", "Barrelbelly", "Fireforge", "Deepvein", "Ironfist", "Mountainson", "Anvilheart" };
++    static std::vector<char const*> const gnome = { "Cogspinner", "Sparkwrench", "Fizzlebolt", "Gizmobolt", "Tinkerfuse", "Copperpot", "Sprocketwhiz", "Wobblegear", "Fusewick", "Boltbuckle", "Spannerspin", "Gadgetwick", "Clickclack", "Nittlebit", "Sparkcrank", "Whirlygig" };
++    static std::vector<char const*> const nightElf = { "Moonwhisper", "Starbreeze", "Nightsong", "Shadowleaf", "Silverbough", "Duskwind", "Starfall", "Swiftarrow", "Mistwalker", "Windsong", "Thornbough", "Earthsong", "Nightbloom", "Sagewhisper", "Ravenfeather", "Leafshadow" };
++    static std::vector<char const*> const highElf = { "Dawnblade", "Goldenleaf", "Brightsong", "Firemane", "Embersong", "Lightwhisper", "Dawnstar", "Sunweaver", "Goldmantle", "Starflare", "Fairwind", "Ashbloom", "Flameheart", "Dawnseeker", "Spellsong", "Sunbright" };
++    static std::vector<char const*> const orc = { "Bloodfist", "Skullcrush", "Ironjaw", "Stonefang", "Axebreaker", "Bonegrinder", "Wolfrider", "Grimtusk", "Blackmaw", "Ragefang", "Skullcleave", "Bladefist", "Rockfist", "Ashclaw", "Warmaul", "Ironhowl" };
++    static std::vector<char const*> const troll = { "Shadowtusk", "Hexwalker", "Mojomaker", "Spiritfang", "Raptorbane", "Snaketongue", "Bonecharm", "Junglestride", "Tigerfang", "Voodoohand", "Mossmane", "Batrider", "Spearcaller", "Darkjuju" };
++    static std::vector<char const*> const tauren = { "Thunderhoof", "Earthsong", "Highmane", "Skyhorn", "Stormhorn", "Ragetotem", "Wildmane", "Cloudhoof", "Ironhide", "Longstride", "Stonebreaker", "Riverwind", "Eaglemane", "Dawnhoof", "Grasswalker", "Mossback" };
++    static std::vector<char const*> const undead = { "Ashgrave", "Mournwood", "Blackmoor", "Coldhollow", "Duskfall", "Graveborn", "Hollowell", "Gravesend", "Rotwell", "Sorrowmere", "Ravenhill", "Wormwood", "Cinderwick", "Bleakmoor", "Ashwhisper", "Coldmarrow" };
++    static std::vector<char const*> const draenei = { "Lightward", "Starseeker", "Crystalsong", "Dawnveil", "Truehammer", "Sunhallow", "Azurewind", "Hopebringer", "Starmend", "Lightsworn", "Velenhart", "Shimmerveil" };
++    static std::vector<char const*> const goblin = { "Fizzlecash", "Gearsnap", "Quickfuse", "Coinpurse", "Greasegrip", "Sparkgrin", "Bigsprocket", "Fastcash", "Goldtooth", "Scrapspark", "Boomgrin", "Rustbolt" };
++    static std::vector<char const*> const pandaren = { "Brewbelly", "Jadepaw", "Silkpaw", "Mistbrew", "Peachblossom", "Thunderpaw", "Cloudstep", "Jadewind", "Softpaw", "Riverbrew", "Lotusleaf", "Plumfoot" };
++    static std::vector<char const*> const vulpera = { "Sandtail", "Dunefur", "Duststep", "Brightear", "Quicktail", "Sunwhisker", "Junkpaw", "Wanderpaw", "Sandwhisker", "Dustytail", "Scrapfinder" };
++
++    ChrRacesEntry const* entry = sChrRacesStore.LookupEntry(race);
++    std::string name = entry && entry->name[0] ? entry->name[0] : "";
++    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
++    auto has = [&name](char const* part) { return name.find(part) != std::string::npos; };
++    if (has("night elf") || has("nightborne")) return nightElf;
++    if (has("elf")) return highElf;
++    if (has("dwarf") || has("earthen") || has("dark iron")) return dwarf;
++    if (has("gnome")) return gnome;
++    if (has("goblin")) return goblin;
++    if (has("troll")) return troll;
++    if (has("tauren") || has("taunka") || has("highmountain")) return tauren;
++    if (has("orc") || has("ogre")) return orc;
++    if (has("undead") || has("forsaken") || has("skeleton")) return undead;
++    if (has("draenei") || has("broken") || has("eredar")) return draenei;
++    if (has("pandaren")) return pandaren;
++    if (has("vulpera")) return vulpera;
++    return human;
++}
++
++std::string FirstName(std::string const& name)
++{
++    size_t space = name.find(' ');
++    return space == std::string::npos ? name : name.substr(0, space);
++}
++
++// The whole name for a first name under the current setting.
++std::string NameFor(std::string const& first, uint8 race)
++{
++    switch (sPlayerbotAIConfig.coaBotSurname)
++    {
++        case 0:
++            return first;
++        case 2:
++        {
++            uint32 h = 2166136261u;
++            for (unsigned char c : first)
++                h = (h ^ static_cast<uint32>(std::tolower(c))) * 16777619u;
++            std::vector<char const*> const& list = SurnamesFor(race);
++            return first + " " + list[h % list.size()];
++        }
++        default:
++            return first + " " + BotSurname;
++    }
+ }
+ }  // namespace
+ 
+-std::string CoaBotName(std::string const& firstName)
++std::string CoaBotName(std::string const& firstName, uint8 race)
+ {
+-    if (!sPlayerbotAIConfig.coaBotSurname || firstName.find(' ') != std::string::npos)
++    if (firstName.find(' ') != std::string::npos)
+         return firstName;
+-    return firstName + Surname;
++    return NameFor(firstName, race);
+ }
+ 
+ void ApplyCoaBotSurnames()
+@@ -43,8 +103,6 @@ void ApplyCoaBotSurnames()
+         return;
+     applied = true;
+ 
+-    bool const wanted = sPlayerbotAIConfig.coaBotSurname;
+-
+     std::unordered_set<uint32> accounts;
+     if (QueryResult result = LoginDatabase.Query("SELECT id FROM account WHERE username LIKE '{}%'",
+                                                  sPlayerbotAIConfig.randomBotAccountPrefix))
+@@ -54,14 +112,15 @@ void ApplyCoaBotSurnames()
+     if (accounts.empty())
+         return;
+ 
+-    struct Row { uint32 guid; uint32 account; std::string name; };
++    struct Row { uint32 guid; uint32 account; std::string name; uint8 race; };
+     std::vector<Row> rows;
+     std::unordered_set<std::string> names;
+-    if (QueryResult result = CharacterDatabase.Query("SELECT guid, account, name FROM characters"))
++    if (QueryResult result = CharacterDatabase.Query("SELECT guid, account, name, race FROM characters"))
+         do
+         {
+             Field* fields = result->Fetch();
+-            rows.push_back({ fields[0].Get<uint32>(), fields[1].Get<uint32>(), fields[2].Get<std::string>() });
++            rows.push_back({ fields[0].Get<uint32>(), fields[1].Get<uint32>(), fields[2].Get<std::string>(),
++                             fields[3].Get<uint8>() });
+             names.insert(rows.back().name);
+         } while (result->NextRow());
+ 
+@@ -72,11 +131,10 @@ void ApplyCoaBotSurnames()
+         if (!accounts.count(row.account))
+             continue;
+ 
+-        bool const has = HasSurname(row.name);
+-        if (has == wanted || (wanted && row.name.find(' ') != std::string::npos))
++        std::string renamedTo = NameFor(FirstName(row.name), row.race);
++        if (renamedTo == row.name)
+             continue;
+ 
+-        std::string renamedTo = wanted ? row.name + Surname : row.name.substr(0, row.name.size() - std::string(Surname).size());
+         // A player may hold the name already: that bot keeps its own.
+         if (names.count(renamedTo))
+         {
+@@ -94,6 +152,6 @@ void ApplyCoaBotSurnames()
+     CharacterDatabase.CommitTransaction(trans);
+ 
+     if (renamed || skipped)
+-        LOG_INFO("server.loading", ">> {} the surname \"Bot\" for {} random bots ({} names already taken)",
+-                 wanted ? "Gave" : "Took back", renamed, skipped);
++        LOG_INFO("server.loading", ">> Renamed {} random bots for AiPlayerbot.CoaBotSurname = {} ({} names already taken)",
++                 renamed, sPlayerbotAIConfig.coaBotSurname, skipped);
+ }
+diff --git a/src/Ai/Class/Coa/CoaBotNames.h b/src/Ai/Class/Coa/CoaBotNames.h
+index 2fed73a7..8774c24f 100644
+--- a/src/Ai/Class/Coa/CoaBotNames.h
++++ b/src/Ai/Class/Coa/CoaBotNames.h
+@@ -8,10 +8,12 @@
+ 
+ #include <string>
+ 
+-// The surname random bots carry when AiPlayerbot.CoaBotSurname is on: "Kegarink Bot".
+-std::string CoaBotName(std::string const& firstName);
++#include "Define.h"
+ 
+-// Gives every random bot the surname, or takes it back when the setting is off. Run at startup,
++// The whole name of a random bot under AiPlayerbot.CoaBotSurname: "Kegarink", "Kegarink Bot" or "Kegarink Stonehammer".
++std::string CoaBotName(std::string const& firstName, uint8 race);
++
++// Gives every random bot the name the setting asks for: the surname "Bot", one of its people, or none. Run at startup,
+ // once the random bots exist and before any of them logs in.
+ void ApplyCoaBotSurnames();
+ 
+diff --git a/src/Bot/Factory/RandomPlayerbotFactory.cpp b/src/Bot/Factory/RandomPlayerbotFactory.cpp
+index 9f38cbc9..a4fbf179 100644
+--- a/src/Bot/Factory/RandomPlayerbotFactory.cpp
++++ b/src/Bot/Factory/RandomPlayerbotFactory.cpp
+@@ -144,9 +144,9 @@ Player* RandomPlayerbotFactory::CreateRandomBot(WorldSession* session, uint8 cls
+         return nullptr;
+     }
+ 
+-    // "Kegarink Bot" with AiPlayerbot.CoaBotSurname: the first name alone was checked free, the
++    // "Kegarink Bot" or "Kegarink Stonehammer" with AiPlayerbot.CoaBotSurname: the first name alone was checked free, the
+     // whole name may not be (a bot renamed at an earlier start holds it).
+-    if (std::string const surnamed = CoaBotName(name); surnamed != name)
++    if (std::string const surnamed = CoaBotName(name, race); surnamed != name)
+     {
+         CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHECK_NAME);
+         stmt->SetData(0, surnamed);
+diff --git a/src/PlayerbotAIConfig.cpp b/src/PlayerbotAIConfig.cpp
+index d87293cc..83fce8b2 100644
+--- a/src/PlayerbotAIConfig.cpp
++++ b/src/PlayerbotAIConfig.cpp
+@@ -922,7 +922,7 @@ bool PlayerbotAIConfig::Initialize()
+     coaArenaPurge = sConfigMgr->GetOption<bool>("AiPlayerbot.CoaArenaPurge", true, false);
+     coaBossKnowledge = sConfigMgr->GetOption<bool>("AiPlayerbot.CoaBossKnowledge", true);
+     coaRecruitSameFaction = sConfigMgr->GetOption<bool>("AiPlayerbot.CoaRecruitSameFaction", true);
+-    coaBotSurname = sConfigMgr->GetOption<bool>("AiPlayerbot.CoaBotSurname", true);
++    coaBotSurname = std::min<uint32>(2, sConfigMgr->GetOption<uint32>("AiPlayerbot.CoaBotSurname", 1));
+     coaThreatHold = sConfigMgr->GetOption<uint32>("AiPlayerbot.CoaThreatHold", 90);
+     coaTankThreatBonus = sConfigMgr->GetOption<uint32>("AiPlayerbot.CoaTankThreatBonus", 0);
+     coaAttackLoop = sConfigMgr->GetOption<bool>("AiPlayerbot.CoaAttackLoop", true);
+diff --git a/src/PlayerbotAIConfig.h b/src/PlayerbotAIConfig.h
+index 8a453b2b..3993bef5 100644
+--- a/src/PlayerbotAIConfig.h
++++ b/src/PlayerbotAIConfig.h
+@@ -477,7 +477,7 @@ public:
+     bool coaArenaPurge;
+     bool coaBossKnowledge;
+     bool coaRecruitSameFaction;
+-    bool coaBotSurname;
++    uint32 coaBotSurname;
+     uint32 coaThreatHold;
+     uint32 coaTankThreatBonus;
+     bool coaAttackLoop;
