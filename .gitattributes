@@ -1,0 +1,2 @@
+# SQL with LF everywhere: the core hashes these files, and a CRLF checkout made it re-apply them
+*.sql text eol=lf
