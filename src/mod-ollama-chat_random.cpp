@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_random.h"
+#include "mod-ollama-chat_voice.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_lore.h"
 #include "mod-ollama-chat_bonds.h"
@@ -297,6 +298,7 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
     // early, because pending replies still have to be delivered even when
     // random chatter itself is switched off.
     OllamaDispatch_Update(diff);
+    Voice_Update(diff);
     Presence_Update(diff);
 
     static uint32 maintenanceTimer = 0;

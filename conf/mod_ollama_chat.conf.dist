@@ -363,6 +363,12 @@ OllamaChat.DisableForCustomChannels = 0
 #     Default:     0 (false)
 OllamaChat.DisableForSayYell = 0
 
+# OllamaChat.VoiceLabels
+#     Description: Hidden labels for the Companion Voice client add-on, so players' clients speak bot lines aloud
+#                  (party, whisper, say, yell). Players without the add-on see nothing.
+#     Default:     1 (true)
+OllamaChat.VoiceLabels = 1
+
 # OllamaChat.DisableForGuild
 #     Description: When enabled (1), disables Ollama bot replies, random chatter, and events in Guild and Officer channels.
 #                  Useful for keeping guild chat focused without bot chatter.

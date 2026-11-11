@@ -1,4 +1,5 @@
 #include "mod-ollama-chat_dispatch.h"
+#include "mod-ollama-chat_voice.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_expression.h"
@@ -409,6 +410,7 @@ namespace
                     return false;
                 if (!OllamaGroupHasRealPlayer(bot))
                     return false;
+                Voice_Label(bot, nullptr, VOICE_PARTY, c.text);
                 return botAI->SayToParty(c.text);
 
             case SRC_RAID_LOCAL:
@@ -416,11 +418,13 @@ namespace
                     return false;
                 if (!OllamaGroupHasRealPlayer(bot))
                     return false;
+                Voice_Label(bot, nullptr, VOICE_PARTY, c.text);
                 return botAI->SayToRaid(c.text);
 
             case SRC_YELL_LOCAL:
                 if (g_DisableForSayYell || !AnyoneInRange(bot, g_YellDistance))
                     return false;
+                Voice_Label(bot, nullptr, VOICE_YELL, c.text);
                 return botAI->Yell(c.text);
 
             case SRC_WHISPER_LOCAL:
@@ -428,6 +432,7 @@ namespace
                 Player* target = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
                 if (!target)
                     return false;
+                Voice_Label(bot, target, VOICE_WHISPER, c.text);
                 return botAI->Whisper(c.text, target->GetName());
             }
 
@@ -435,6 +440,7 @@ namespace
             default:
                 if (g_DisableForSayYell || !AnyoneInRange(bot, g_SayDistance))
                     return false;
+                Voice_Label(bot, nullptr, VOICE_SAY, c.text);
                 return botAI->Say(c.text);
         }
     }
@@ -508,6 +514,7 @@ namespace
             // As the module would have whispered it: in the universal tongue, so a trade across the factions reads.
             if (Player* to = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid)))
             {
+                Voice_Label(bot, to, VOICE_WHISPER, c.text);
                 bot->Whisper(c.text, LANG_UNIVERSAL, to);
                 sent = true;
             }

@@ -479,6 +479,7 @@ uint32_t g_EventCooldownTime = 10;
 // --------------------------------------------
 bool g_DisableForCustomChannels = false;
 bool g_DisableForSayYell = false;
+bool g_VoiceLabels = true;
 bool g_DisableForGuild = false;
 bool g_DisableForParty = false;
 
@@ -1170,6 +1171,7 @@ void LoadOllamaChatConfig()
     // Channel disable settings
     g_DisableForCustomChannels = sConfigMgr->GetOption<bool>("OllamaChat.DisableForCustomChannels", false);
     g_DisableForSayYell = sConfigMgr->GetOption<bool>("OllamaChat.DisableForSayYell", false);
+    g_VoiceLabels = sConfigMgr->GetOption<bool>("OllamaChat.VoiceLabels", true);
     g_DisableForGuild = sConfigMgr->GetOption<bool>("OllamaChat.DisableForGuild", false);
     g_DisableForParty = sConfigMgr->GetOption<bool>("OllamaChat.DisableForParty", false);
 

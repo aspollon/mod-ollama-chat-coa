@@ -486,6 +486,7 @@ extern uint32_t g_EventCooldownTime;
 // --------------------------------------------
 extern bool g_DisableForCustomChannels;
 extern bool g_DisableForSayYell;
+extern bool g_VoiceLabels;
 extern bool g_DisableForGuild;
 extern bool g_DisableForParty;
 
