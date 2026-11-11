@@ -381,6 +381,13 @@ OllamaChat.DisableForGuild = 0
 #     Default:     0 (false)
 OllamaChat.DisableForParty = 0
 
+# OllamaChat.OnlyPartyBots
+#     Description: Only bots in a group with a real player use the language model: they answer, chatter and
+#                  comment. All other bots stay silent (stock playerbot behaviour). Saves a lot of load on a
+#                  slow machine; roleplay sheets still get written when someone opens one.
+#     Default:     0 (all bots)
+OllamaChat.OnlyPartyBots = 0
+
 # --------------------------------------------
 # RANDOM CHATTER SYSTEM
 # --------------------------------------------

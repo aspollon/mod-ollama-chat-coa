@@ -656,6 +656,14 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
     if (request.prompt.empty() || request.botGuid == 0)
         return false;
 
+    // OllamaChat.OnlyPartyBots: only bots grouped with a real player use the language model
+    if (g_OnlyPartyBots)
+    {
+        Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(request.botGuid));
+        if (!bot || !bot->GetGroup() || !OllamaGroupHasRealPlayer(bot))
+            return false;
+    }
+
     Task task;
     task.type    = TaskType::ChatReply;
     task.request = std::move(request);

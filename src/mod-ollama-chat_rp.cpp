@@ -1,6 +1,7 @@
 #include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_coa.h"
+#include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_world.h"
@@ -356,7 +357,7 @@ namespace
             if (pick)
                 break;
         }
-        if (!pick)
+        if (!pick && !g_OnlyPartyBots)
             for (auto const& [guid, real] : players)
             {
                 if (!OllamaIsRealPlayer(real) || !real->IsInWorld())

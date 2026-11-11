@@ -489,6 +489,7 @@ extern bool g_DisableForSayYell;
 extern bool g_VoiceLabels;
 extern bool g_DisableForGuild;
 extern bool g_DisableForParty;
+extern bool g_OnlyPartyBots;
 
 // Which numbered channels ambient chatter may use.
 extern bool g_ChatterUseGeneralChannel;

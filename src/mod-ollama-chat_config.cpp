@@ -483,6 +483,7 @@ bool g_DisableForSayYell = false;
 bool g_VoiceLabels = true;
 bool g_DisableForGuild = false;
 bool g_DisableForParty = false;
+bool g_OnlyPartyBots = false;
 
 bool g_ChatterUseGeneralChannel           = true;
 bool g_ChatterUseTradeChannel             = true;
@@ -1176,6 +1177,7 @@ void LoadOllamaChatConfig()
     g_VoiceLabels = sConfigMgr->GetOption<bool>("OllamaChat.VoiceLabels", true);
     g_DisableForGuild = sConfigMgr->GetOption<bool>("OllamaChat.DisableForGuild", false);
     g_DisableForParty = sConfigMgr->GetOption<bool>("OllamaChat.DisableForParty", false);
+    g_OnlyPartyBots = sConfigMgr->GetOption<bool>("OllamaChat.OnlyPartyBots", false);
 
     LOG_INFO("server.loading",
              "[Ollama Chat] Config loaded: Enabled = {}, SayDistance = {}, YellDistance = {}, "
