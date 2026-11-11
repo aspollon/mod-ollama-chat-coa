@@ -2155,8 +2155,10 @@ OllamaChat.RP.Enable = 1
 # OllamaChat.RP.Pregenerate
 #     Description: While the language model has nothing else to do, it writes sheets ahead for bots in
 #                  a real player's group, then for bots near one, so a sheet is mostly ready when opened.
-#     Default:     1
-OllamaChat.RP.Pregenerate = 1
+#                  Off by default: on a server without a graphics card the model shares the processor with the
+#                  worldserver, and writing ahead keeps it busy (lag). Turn it on with a GPU.
+#     Default:     0 (a sheet is written when someone opens it)
+OllamaChat.RP.Pregenerate = 0
 
 # OllamaChat.RP.PregenerateRange
 #     Description: How near a real player a bot must be for its sheet to be written ahead (yards).

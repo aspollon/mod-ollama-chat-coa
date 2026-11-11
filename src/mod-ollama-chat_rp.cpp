@@ -30,7 +30,7 @@ namespace
 {
     char const* const PREFIX = "AFKRP";
 
-    bool     g_enable = true, g_pregen = true, g_inChat = true;
+    bool     g_enable = true, g_pregen = false, g_inChat = true;
     float    g_range = 40.0f;
     uint32_t g_perHour = 20;
     std::string g_language;
@@ -393,7 +393,7 @@ namespace
 void Rp_LoadConfig()
 {
     g_enable   = sConfigMgr->GetOption<bool>("OllamaChat.RP.Enable", true);
-    g_pregen   = sConfigMgr->GetOption<bool>("OllamaChat.RP.Pregenerate", true);
+    g_pregen   = sConfigMgr->GetOption<bool>("OllamaChat.RP.Pregenerate", false);
     g_range    = sConfigMgr->GetOption<float>("OllamaChat.RP.PregenerateRange", 40.0f);
     g_perHour  = sConfigMgr->GetOption<uint32_t>("OllamaChat.RP.PregeneratePerHour", 20);
     g_inChat   = sConfigMgr->GetOption<bool>("OllamaChat.RP.UseSheetsInChat", true);
