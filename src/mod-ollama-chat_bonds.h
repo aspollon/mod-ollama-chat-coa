@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 class Creature;
 class Player;
@@ -35,6 +37,21 @@ void Bond_NoteShared(Player* bot, Player* other, int8_t change);
 
 // The bond section of a prompt: who `other` is to the bot, how to treat them, when they last spoke and what about.
 std::string Bond_BuildPromptSection(Player* bot, Player* other);
+// How a bot stands with a person, for the roleplay add-on. `standing` is one of: stranger, enemy, dislike, distrust,
+// know, like, friend, close, drawn, beloved (the same steps the prompt uses). Any thread.
+struct BondStanding
+{
+    std::string standing = "stranger";
+    int32_t     affinity = 0;
+    int32_t     romance  = 0;
+    uint32_t    talks    = 0;
+    uint32_t    shared   = 0;
+    std::string lastTopic;
+};
+BondStanding Bond_Standing(uint64_t botGuid, uint64_t otherGuid);
+// Every bot that knows `otherGuid` (has talked or been through something with them), with its standing.
+std::vector<std::pair<uint64_t, BondStanding>> Bond_ListFor(uint64_t otherGuid);
+
 // What the modules of the bridge say about who the bot is right now; "" when none says anything.
 std::string Bond_PersonaSection(Player* bot);
 

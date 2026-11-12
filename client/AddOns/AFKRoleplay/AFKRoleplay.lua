@@ -8,19 +8,29 @@ local L = de and {
   none = "Kein Rollenspielbogen.", gone = "Nicht in Reichweite oder offline.", failed = "Konnte nicht geschrieben werden. Versuch es später noch einmal.",
   busy = "Die Sprach-KI ist gerade ausgelastet. Versuch es gleich noch einmal.", asking = "Frage den Bogen ab ...",
   saved = "Dein Bogen ist gespeichert. Bots, die mit dir sprechen, kennen ihn jetzt.", edit = "Mein Rollenspielbogen",
-  help = "/rp (Ziel) | /rp edit | /rp <Name>", nothing = "Du hast noch keinen Bogen. /rp edit legt ihn an.",
+  help = "/rp (Ziel) | /rp edit | /rp bonds | /rp <Name>", nothing = "Du hast noch keinen Bogen. /rp edit legt ihn an.",
+  bonds = "Beziehungen", nobonds = "Noch kennt dich kein Bot. Sprich mit ihnen!", talks = "Gespräche", shared = "Gemeinsam erlebt",
+  last = "Zuletzt", affinity = "Zuneigung", romance = "Romantik", groupGood = "Freunde und Vertraute", groupMid = "Bekannte",
+  groupBad = "Abneigung und Feindschaft",
+  stranger = "Fremd", enemy = "Feind", dislike = "Kann dich nicht leiden", distrust = "Misstraut dir", know = "Bekannt",
+  like = "Mag dich", friend = "Freund", close = "Enger Freund", drawn = "Fühlt sich zu dir hingezogen", beloved = "Geliebt",
 } or {
   NA = "Name", TI = "Title", AG = "Age", HO = "Home", AP = "Looks", PE = "Manner", HI = "History", CU = "Right now",
   mine = "My sheet", save = "Save", cancel = "Cancel", writing = "Being written ... (this can take a minute)",
   none = "No roleplay sheet.", gone = "Out of reach or offline.", failed = "Could not be written. Try again later.",
   busy = "The language model is busy. Try again in a moment.", asking = "Asking for the sheet ...",
   saved = "Your sheet is saved. Bots who talk to you know it now.", edit = "My roleplay sheet",
-  help = "/rp (target) | /rp edit | /rp <name>", nothing = "You have no sheet yet. /rp edit makes one.",
+  help = "/rp (target) | /rp edit | /rp bonds | /rp <name>", nothing = "You have no sheet yet. /rp edit makes one.",
+  bonds = "Bonds", nobonds = "No bot knows you yet. Go and talk to them!", talks = "Talks", shared = "Been through together",
+  last = "Last time", affinity = "Affection", romance = "Romance", groupGood = "Friends and confidants", groupMid = "Acquaintances",
+  groupBad = "Dislike and enmity",
+  stranger = "Stranger", enemy = "Enemy", dislike = "Dislikes you", distrust = "Distrusts you", know = "Acquaintance",
+  like = "Likes you", friend = "Friend", close = "Close friend", drawn = "Drawn to you", beloved = "Beloved",
 }
 local FIELDS = { "NA", "TI", "AG", "HO", "AP", "PE", "HI", "CU" }
 local MAX = { NA = 40, TI = 80, AG = 40, HO = 80, AP = 1200, PE = 1200, HI = 3000, CU = 300 }
 
-local sheets, titles, buf, peeked = {}, {}, {}, {}
+local sheets, titles, buf, peeked, bonds = {}, {}, {}, {}, {}
 local queue = {}
 local viewName
 local function me() return (UnitName("player")) end
@@ -66,8 +76,56 @@ CreateFrame("Button", nil, view, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -6, 
 view.name = view:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); view.name:SetPoint("TOP", 0, -22)
 view.title = view:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); view.title:SetPoint("TOP", view.name, "BOTTOM", 0, -4)
 view.title:SetTextColor(1, 0.82, 0)
+-- ---------------------------------------------------------------- bonds, shown like reputation
+-- each step: the affection range its bar fills (romance for drawn/beloved) and its colour (the reputation colours)
+local STEP = {
+  enemy = { -100, -60, 1 }, dislike = { -60, -25, 2 }, distrust = { -25, -5, 3 }, stranger = { 0, 0, 4 },
+  know = { -5, 15, 4 }, like = { 15, 40, 5 }, friend = { 40, 70, 6 }, close = { 70, 100, 8 },
+  drawn = { 30, 60, "pink" }, beloved = { 60, 100, "pink" },
+}
+local function stepColor(st)
+  local c = (STEP[st] or STEP.stranger)[3]
+  if c == "pink" then return 1, 0.45, 0.75 end
+  local fc = FACTION_BAR_COLORS and FACTION_BAR_COLORS[c]
+  if fc then return fc.r, fc.g, fc.b end
+  return 0.9, 0.7, 0
+end
+local function fillBar(bar, b)
+  local st = b and b.standing or "stranger"
+  local lo, hi = unpack(STEP[st] or STEP.stranger)
+  local v = (st == "drawn" or st == "beloved") and b.romance or (b and b.affinity or 0)
+  bar:SetMinMaxValues(0, 1)
+  bar:SetValue(hi > lo and math.max(0, math.min(1, (v - lo) / (hi - lo))) or 0)
+  bar:SetStatusBarColor(stepColor(st))
+  bar.text:SetText(L[st] or st)
+  bar.bond = b
+end
+local function bondTooltip(owner, name, b)
+  GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+  GameTooltip:AddLine(name, 1, 1, 1)
+  GameTooltip:AddLine(L[b.standing] or b.standing, stepColor(b.standing))
+  GameTooltip:AddDoubleLine(L.affinity, b.affinity .. " / 100", 1, 0.82, 0, 1, 1, 1)
+  if (b.romance or 0) > 0 then GameTooltip:AddDoubleLine(L.romance, b.romance .. " / 100", 1, 0.82, 0, 1, 1, 1) end
+  GameTooltip:AddDoubleLine(L.talks, b.talks or 0, 1, 0.82, 0, 1, 1, 1)
+  if (b.shared or 0) > 0 then GameTooltip:AddDoubleLine(L.shared, b.shared, 1, 0.82, 0, 1, 1, 1) end
+  if b.topic and b.topic ~= "" then GameTooltip:AddLine(L.last .. ": " .. b.topic, 0.8, 0.8, 0.8, true) end
+  GameTooltip:Show()
+end
+local function makeBar(parent, w)
+  local bar = CreateFrame("StatusBar", nil, parent)
+  size(bar, w, 14); bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+  local bg = bar:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetTexture(0, 0, 0, 0.5)
+  bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); bar.text:SetPoint("CENTER")
+  bar:EnableMouse(true)
+  bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return bar
+end
+
+view.bond = makeBar(view, 260); view.bond:SetPoint("TOP", view.title, "BOTTOM", 0, -6); view.bond:Hide()
+view.bond:SetScript("OnEnter", function(self) if self.bond then bondTooltip(self, viewName, self.bond) end end)
+
 local vscroll = CreateFrame("ScrollFrame", "AFKRP_ViewScroll", view, "UIPanelScrollFrameTemplate")
-vscroll:SetPoint("TOPLEFT", 22, -70); vscroll:SetPoint("BOTTOMRIGHT", -40, 48)
+vscroll:SetPoint("TOPLEFT", 22, -84); vscroll:SetPoint("BOTTOMRIGHT", -40, 48)
 local vchild = CreateFrame("Frame", nil, vscroll); size(vchild, 370, 10); vscroll:SetScrollChild(vchild)
 view.body = vchild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 view.body:SetPoint("TOPLEFT"); view.body:SetWidth(370); view.body:SetJustifyH("LEFT"); view.body:SetJustifyV("TOP")
@@ -85,6 +143,7 @@ local function refresh()
   local f = s.f or {}
   view.name:SetText((f.NA and f.NA ~= "") and (f.NA .. "  |cff888888(" .. viewName .. ")|r") or viewName)
   view.title:SetText(f.TI and f.TI ~= "" and ("<" .. f.TI .. ">") or "")
+  if bonds[viewName] and viewName ~= me() then fillBar(view.bond, bonds[viewName]); view.bond:Show() else view.bond:Hide() end
   local text
   if s.state == "writing" then text = "|cff999999" .. L.writing .. "|r"
   elseif s.state == "asking" then text = "|cff999999" .. L.asking .. "|r"
@@ -108,11 +167,79 @@ local function open(name)
   else
     sheets[name] = sheets[name] or { f = {} }
     sheets[name].state = "asking"
+    bonds[name] = nil
     send("get\t" .. name)
   end
   refresh(); view:Show()
 end
 AFKRoleplay = { Open = open }
+
+-- ---------------------------------------------------------------- every bond, like the reputation pane
+local list = CreateFrame("Frame", "AFKRP_Bonds", UIParent)
+size(list, 380, 460); list:SetPoint("CENTER", 220, 40); list:SetFrameStrata("DIALOG"); list:Hide()
+list:EnableMouse(true); list:SetMovable(true); list:RegisterForDrag("LeftButton")
+list:SetScript("OnDragStart", list.StartMoving); list:SetScript("OnDragStop", list.StopMovingOrSizing)
+backdrop(list); tinsert(UISpecialFrames, "AFKRP_Bonds")
+CreateFrame("Button", nil, list, "UIPanelCloseButton"):SetPoint("TOPRIGHT", -6, -6)
+local ltitle = list:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); ltitle:SetPoint("TOP", 0, -20); ltitle:SetText(L.bonds)
+local lscroll = CreateFrame("ScrollFrame", "AFKRP_BondsScroll", list, "UIPanelScrollFrameTemplate")
+lscroll:SetPoint("TOPLEFT", 22, -50); lscroll:SetPoint("BOTTOMRIGHT", -40, 22)
+local lchild = CreateFrame("Frame", nil, lscroll); size(lchild, 310, 10); lscroll:SetScrollChild(lchild)
+local lempty = lchild:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); lempty:SetPoint("TOPLEFT", 4, -6)
+lempty:SetWidth(300); lempty:SetJustifyH("LEFT"); lempty:SetText(L.nobonds)
+local rows, headers, incoming = {}, {}, {}
+
+local function row(i)
+  if rows[i] then return rows[i] end
+  local r = CreateFrame("Button", nil, lchild); size(r, 310, 20)
+  r.name = r:CreateFontString(nil, "OVERLAY", "GameFontNormal"); r.name:SetPoint("LEFT", 10, 0); r.name:SetWidth(120)
+  r.name:SetJustifyH("LEFT")
+  r.bar = makeBar(r, 170); r.bar:SetPoint("RIGHT", -4, 0)
+  r.bar:SetScript("OnEnter", function(self) bondTooltip(self, r.who, self.bond) end)
+  r.bar:SetScript("OnMouseUp", function() open(r.who) end)
+  r:SetScript("OnClick", function() open(r.who) end)
+  rows[i] = r
+  return r
+end
+local function header(i)
+  if headers[i] then return headers[i] end
+  local h = lchild:CreateFontString(nil, "OVERLAY", "GameFontNormal"); h:SetJustifyH("LEFT")
+  headers[i] = h
+  return h
+end
+local GROUP = { beloved = 1, drawn = 1, close = 1, friend = 1, like = 1, know = 2, stranger = 2, distrust = 3, dislike = 3, enemy = 3 }
+local function showList(entries)
+  for _, r in ipairs(rows) do r:Hide() end
+  for _, h in ipairs(headers) do h:Hide() end
+  if #entries == 0 then lempty:Show() else lempty:Hide() end
+  local y, n, nh = -4, 0, 0
+  for g, title in ipairs({ L.groupGood, L.groupMid, L.groupBad }) do
+    local first = true
+    for _, e in ipairs(entries) do
+      if (GROUP[e.standing] or 2) == g then
+        if first then
+          first = false; nh = nh + 1
+          local h = header(nh); h:ClearAllPoints(); h:SetPoint("TOPLEFT", 0, y); h:SetText(title); h:Show(); y = y - 20
+        end
+        n = n + 1
+        local r = row(n); r.who = e.name; r.name:SetText(e.name); fillBar(r.bar, e)
+        r:ClearAllPoints(); r:SetPoint("TOPLEFT", 0, y); r:Show(); y = y - 22
+      end
+    end
+    if not first then y = y - 6 end
+  end
+  lchild:SetHeight(-y + 10)
+end
+local function openBonds()
+  incoming = {}
+  showList({})
+  lempty:SetText(L.asking)
+  send("bonds")
+  list:Show()
+end
+local bondsBtn = CreateFrame("Button", nil, view, "UIPanelButtonTemplate")
+size(bondsBtn, 120, 22); bondsBtn:SetPoint("LEFT", mineBtn, "RIGHT", 8, 0); bondsBtn:SetText(L.bonds)
+bondsBtn:SetScript("OnClick", openBonds)
 
 -- ---------------------------------------------------------------- your own sheet
 local edit = CreateFrame("Frame", "AFKRP_Edit", UIParent)
@@ -229,6 +356,18 @@ local function onMessage(msg)
     sheets[name].state = state
     if state == "done" or state == "bot" then titles[name] = sheets[name].f.TI or "" end
     if name == viewName then refresh() end
+  elseif cmd == "b" then
+    local name, st, aff, rom, talks, shared, topic = strsplit("\t", rest, 7)
+    bonds[name] = { standing = st, affinity = tonumber(aff) or 0, romance = tonumber(rom) or 0, talks = tonumber(talks) or 0,
+                    shared = tonumber(shared) or 0, topic = decode(topic) }
+    if name == viewName then refresh() end
+  elseif cmd == "bl" then
+    local name, st, aff, rom, talks, shared = strsplit("\t", rest, 6)
+    incoming[#incoming + 1] = { name = name, standing = st, affinity = tonumber(aff) or 0, romance = tonumber(rom) or 0,
+                                talks = tonumber(talks) or 0, shared = tonumber(shared) or 0 }
+  elseif cmd == "be" then
+    lempty:SetText(L.nobonds)
+    showList(incoming)
   elseif cmd == "t" then
     local name, title = strsplit("\t", rest, 2)
     titles[name] = title or ""
@@ -259,6 +398,7 @@ SLASH_AFKROLEPLAY1 = "/rp"
 SlashCmdList.AFKROLEPLAY = function(input)
   input = (input or ""):match("^%s*(.-)%s*$")
   if input == "edit" then openEdit()
+  elseif input == "bonds" then openBonds()
   elseif input == "help" or input == "?" then say(L.help)
   elseif input ~= "" then open(input)
   elseif UnitIsPlayer("target") then open((UnitName("target")))

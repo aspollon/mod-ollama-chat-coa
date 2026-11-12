@@ -59,6 +59,33 @@ namespace
         return v;
     }
 
+    // The step of a bond, as the prompt and the roleplay add-on both name it.
+    std::string StandingOf(Bond const& b)
+    {
+        if (b.talks + b.shared == 0)                              return "stranger";
+        if (b.affinity <= -60)                                    return "enemy";
+        if (b.affinity <= -25)                                    return "dislike";
+        if (b.affinity < -5)                                      return "distrust";
+        if (g_BondRomance && b.romance >= 60 && b.affinity >= 50) return "beloved";
+        if (g_BondRomance && b.romance >= 30 && b.affinity >= 30) return "drawn";
+        if (b.affinity >= 70)                                     return "close";
+        if (b.affinity >= 40)                                     return "friend";
+        if (b.affinity >= 15)                                     return "like";
+        return "know";
+    }
+
+    BondStanding ToStanding(Bond const& b)
+    {
+        BondStanding s;
+        s.standing  = StandingOf(b);
+        s.affinity  = b.affinity;
+        s.romance   = g_BondRomance ? b.romance : 0;
+        s.talks     = b.talks;
+        s.shared    = b.shared;
+        s.lastTopic = b.lastTopic;
+        return s;
+    }
+
     bool IsBot(Player* p)
     {
         return p && OllamaIsBotPlayer(p);
@@ -332,6 +359,29 @@ void Bond_NoteShared(Player* bot, Player* other, int8_t change)
     b.dirty = true;
 }
 
+BondStanding Bond_Standing(uint64_t botGuid, uint64_t otherGuid)
+{
+    std::lock_guard<std::mutex> lock(g_bondMutex);
+    auto botIt = g_bonds.find(botGuid);
+    if (botIt == g_bonds.end())
+        return BondStanding();
+    auto it = botIt->second.find(otherGuid);
+    return it == botIt->second.end() ? BondStanding() : ToStanding(it->second);
+}
+
+std::vector<std::pair<uint64_t, BondStanding>> Bond_ListFor(uint64_t otherGuid)
+{
+    std::vector<std::pair<uint64_t, BondStanding>> out;
+    std::lock_guard<std::mutex> lock(g_bondMutex);
+    for (auto const& [bot, people] : g_bonds)
+    {
+        auto it = people.find(otherGuid);
+        if (it != people.end() && it->second.talks + it->second.shared > 0)
+            out.emplace_back(bot, ToStanding(it->second));
+    }
+    return out;
+}
+
 std::string Bond_BuildPromptSection(Player* bot, Player* other)
 {
     if (!g_BondEnable || !bot || !other || IsBot(other))
@@ -352,26 +402,27 @@ std::string Bond_BuildPromptSection(Player* bot, Player* other)
     const std::string who = other->GetName();
     std::string out = " Who " + who + " is to you: ";
     const uint32_t known = b.talks + b.shared;
+    const std::string standing = StandingOf(b);
 
-    if (known == 0)
+    if (standing == "stranger")
         out += "a stranger; you have never met. Be as open or as wary as your temperament makes you.";
-    else if (b.affinity <= -60)
+    else if (standing == "enemy")
         out += "your enemy. You are openly hostile, may insult or threaten them, and do them no favours.";
-    else if (b.affinity <= -25)
+    else if (standing == "dislike")
         out += "someone you dislike. You are cold, curt and sarcastic with them.";
-    else if (b.affinity < -5)
+    else if (standing == "distrust")
         out += "someone you do not trust. You are guarded and short with them.";
-    else if (g_BondRomance && b.romance >= 60 && b.affinity >= 50)
+    else if (standing == "beloved")
         out += "your beloved. You are tender, affectionate and a little protective, with private jokes between "
                "you; keep it warm and tasteful, never explicit.";
-    else if (g_BondRomance && b.romance >= 30 && b.affinity >= 30)
+    else if (standing == "drawn")
         out += "someone you are drawn to. You enjoy their attention and flirt back, shyly or boldly as your "
                "temperament allows; keep it tasteful.";
-    else if (b.affinity >= 70)
+    else if (standing == "close")
         out += "one of your closest friends. You trust them completely, tease them and would fight for them.";
-    else if (b.affinity >= 40)
+    else if (standing == "friend")
         out += "your friend. You are warm and at ease with them, joke and speak openly.";
-    else if (b.affinity >= 15)
+    else if (standing == "like")
         out += "someone you like. You are glad to see them.";
     else
         out += "someone you know a little.";

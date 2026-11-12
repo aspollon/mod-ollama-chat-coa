@@ -1,11 +1,13 @@
 #include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat_api.h"
+#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_world.h"
 
+#include "CharacterCache.h"
 #include "Chat.h"
 #include "Config.h"
 #include "DatabaseEnv.h"
@@ -18,6 +20,7 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 
+#include <algorithm>
 #include <cctype>
 #include <map>
 #include <mutex>
@@ -128,6 +131,35 @@ namespace
             } while (!text.empty());
         }
         Send(to, "s\t" + name + "\t" + (sheet.bot ? "bot" : "done"));
+    }
+
+    // A bot's standing with the player, for the add-on's bond bar: b <name> <standing> <affinity> <romance> <talks>
+    // <shared> <last topic>.
+    void SendStanding(Player* to, std::string const& name, uint64_t botGuid)
+    {
+        BondStanding b = Bond_Standing(botGuid, to->GetGUID().GetRawValue());
+        Send(to, "b\t" + name + "\t" + b.standing + "\t" + std::to_string(b.affinity) + "\t" + std::to_string(b.romance) +
+                 "\t" + std::to_string(b.talks) + "\t" + std::to_string(b.shared) + "\t" + Cut(Encode(b.lastTopic), 150));
+    }
+
+    // Every bot that knows the player, best friends first: bl <name> <standing> <affinity> <romance> <talks> <shared>,
+    // then be.
+    void SendBondList(Player* to)
+    {
+        auto list = Bond_ListFor(to->GetGUID().GetRawValue());
+        std::sort(list.begin(), list.end(), [](auto const& a, auto const& b) { return a.second.affinity > b.second.affinity; });
+        size_t sent = 0;
+        for (auto const& [guid, b] : list)
+        {
+            std::string name;
+            if (!sCharacterCache->GetCharacterNameByGuid(ObjectGuid(guid), name) || name.empty())
+                continue;
+            Send(to, "bl\t" + name + "\t" + b.standing + "\t" + std::to_string(b.affinity) + "\t" + std::to_string(b.romance) +
+                     "\t" + std::to_string(b.talks) + "\t" + std::to_string(b.shared));
+            if (++sent == 100)
+                break;
+        }
+        Send(to, "be\t");
     }
 
     void Save(uint64_t guid)
@@ -296,6 +328,8 @@ namespace
                 Send(player, "t\t" + name + "\t" + title);
                 return;
             }
+            if (OllamaIsBotPlayer(who))
+                SendStanding(player, name, who->GetGUID().GetRawValue());
             if (it != g_sheets.end())
                 SendSheet(player, name, it->second);
             else if (OllamaIsBotPlayer(who) && g_enable)
@@ -324,6 +358,8 @@ namespace
                 g_dirty.insert(me);
             }
         }
+        else if (cmd == "bonds")
+            SendBondList(player);
         else if (cmd == "clear")
         {
             g_sheets.erase(me);
