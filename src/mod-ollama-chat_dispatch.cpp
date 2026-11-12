@@ -445,6 +445,43 @@ namespace
         }
     }
 
+    // The client shows a chat line of at most 255 bytes, and num_predict can stop a reply mid-sentence: the line is
+    // ended on its last full sentence where one is left, else cut at a word with "...".
+    std::string FitChatLine(std::string s)
+    {
+        const size_t kMax = 255;
+        auto isEnd = [](char ch) { return ch == '.' || ch == '!' || ch == '?' || ch == '*' || ch == '"' || ch == '~'; };
+        auto cutAtSentence = [&](size_t limit, size_t keepAtLeast)
+        {
+            for (size_t i = std::min(limit, s.size()); i > keepAtLeast; --i)
+                if (isEnd(s[i - 1]) && (i == s.size() || s[i] == ' '))
+                {
+                    s.resize(i);
+                    return true;
+                }
+            return false;
+        };
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+            s.pop_back();
+        if (s.size() > kMax)
+        {
+            if (cutAtSentence(kMax, kMax / 3))
+                return s;
+            size_t at = s.rfind(' ', kMax - 3);
+            if (at == std::string::npos || at < kMax / 2)
+            {
+                at = kMax - 3;
+                while (at > 0 && (static_cast<unsigned char>(s[at]) & 0xC0) == 0x80)   // not inside a UTF-8 letter
+                    --at;
+            }
+            s.resize(at);
+            return s + "...";
+        }
+        if (!s.empty() && !isEnd(s.back()) && s.back() != '\'' && s.back() != ')' && !cutAtSentence(s.size(), 0))
+            s += s.size() > 60 ? "..." : ".";   // a long line without an end was most likely cut off
+        return s;
+    }
+
     void Deliver(const Completion& delivered, const OllamaWorldSnapshot& world)
     {
         Completion c = delivered;
@@ -458,6 +495,8 @@ namespace
             c.text = "*" + c.action + "*" + (c.text.empty() ? "" : " " + c.text);
             c.action.clear();
         }
+        if (!c.text.empty())
+            c.text = FitChatLine(std::move(c.text));
 
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())
