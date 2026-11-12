@@ -445,41 +445,63 @@ namespace
         }
     }
 
-    // The client shows a chat line of at most 255 bytes, and num_predict can stop a reply mid-sentence: the line is
-    // ended on its last full sentence where one is left, else cut at a word with "...".
-    std::string FitChatLine(std::string s)
+    // A reply as the chat lines that carry it whole: the client shows at most 255 bytes a line, so a longer reply
+    // goes out in several, split after a sentence (else at a word). Cut off by num_predict, only the unfinished tail goes.
+    std::vector<std::string> ChatLines(std::string s)
     {
         const size_t kMax = 255;
         auto isEnd = [](char ch) { return ch == '.' || ch == '!' || ch == '?' || ch == '*' || ch == '"' || ch == '~'; };
-        auto cutAtSentence = [&](size_t limit, size_t keepAtLeast)
+        auto sentenceEnd = [&](const std::string& t, size_t limit, size_t keepAtLeast) -> size_t
         {
-            for (size_t i = std::min(limit, s.size()); i > keepAtLeast; --i)
-                if (isEnd(s[i - 1]) && (i == s.size() || s[i] == ' '))
-                {
-                    s.resize(i);
-                    return true;
-                }
-            return false;
+            for (size_t i = std::min(limit, t.size()); i > keepAtLeast; --i)
+                if (isEnd(t[i - 1]) && (i == t.size() || t[i] == ' '))
+                    return i;
+            return 0;
         };
         while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
             s.pop_back();
-        if (s.size() > kMax)
+        if (!s.empty() && !isEnd(s.back()) && s.back() != '\'' && s.back() != ')')
         {
-            if (cutAtSentence(kMax, kMax / 3))
-                return s;
-            size_t at = s.rfind(' ', kMax - 3);
-            if (at == std::string::npos || at < kMax / 2)
+            if (size_t at = sentenceEnd(s, s.size(), 0))
+                s.resize(at);
+            else
+                s += s.size() > 60 ? "..." : ".";   // a long line without an end was most likely cut off
+        }
+        std::vector<std::string> lines;
+        while (s.size() > kMax)
+        {
+            size_t at = sentenceEnd(s, kMax, kMax / 3);
+            if (!at)
+                at = s.rfind(' ', kMax);
+            if (at == std::string::npos || at < kMax / 3)
             {
-                at = kMax - 3;
+                at = kMax;
                 while (at > 0 && (static_cast<unsigned char>(s[at]) & 0xC0) == 0x80)   // not inside a UTF-8 letter
                     --at;
             }
-            s.resize(at);
-            return s + "...";
+            lines.push_back(s.substr(0, at));
+            size_t next = s.find_first_not_of(' ', at);
+            s = next == std::string::npos ? std::string() : s.substr(next);
         }
-        if (!s.empty() && !isEnd(s.back()) && s.back() != '\'' && s.back() != ')' && !cutAtSentence(s.size(), 0))
-            s += s.size() > 60 ? "..." : ".";   // a long line without an end was most likely cut off
-        return s;
+        if (!s.empty())
+            lines.push_back(s);
+        return lines;
+    }
+
+    // Each line of a reply through the same route, in order.
+    bool RouteLines(Player* bot, PlayerbotAI* botAI, const Completion& c, const OllamaWorldSnapshot& world,
+                    Channel*& outChannel)
+    {
+        bool sent = false;
+        Completion line = c;
+        for (const std::string& part : ChatLines(c.text))
+        {
+            line.text = part;
+            if (!RouteMessage(bot, botAI, line, world, outChannel))
+                break;
+            sent = true;
+        }
+        return sent;
     }
 
     void Deliver(const Completion& delivered, const OllamaWorldSnapshot& world)
@@ -495,8 +517,6 @@ namespace
             c.text = "*" + c.action + "*" + (c.text.empty() ? "" : " " + c.text);
             c.action.clear();
         }
-        if (!c.text.empty())
-            c.text = FitChatLine(std::move(c.text));
 
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())
@@ -553,13 +573,16 @@ namespace
             // As the module would have whispered it: in the universal tongue, so a trade across the factions reads.
             if (Player* to = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid)))
             {
-                Voice_Label(bot, to, VOICE_WHISPER, c.text);
-                bot->Whisper(c.text, LANG_UNIVERSAL, to);
+                for (const std::string& part : ChatLines(c.text))
+                {
+                    Voice_Label(bot, to, VOICE_WHISPER, part);
+                    bot->Whisper(part, LANG_UNIVERSAL, to);
+                }
                 sent = true;
             }
         }
         else if (!c.text.empty())
-            sent = RouteMessage(bot, botAI, c, world, channel) || sent;
+            sent = RouteLines(bot, botAI, c, world, channel) || sent;
         if (!sent)
         {
             if (g_DebugEnabled)
