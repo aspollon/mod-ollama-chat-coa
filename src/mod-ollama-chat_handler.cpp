@@ -2252,8 +2252,13 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     else
         prompt += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                     fmt::arg("player_message", playerMessage));
-    prompt += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation: react to what was just "
-              "said and to what was said before, keep to the topic, and do not greet again if you are already talking.";
+    // Answering comes first: small models otherwise act out the persona and the sheets in every line (2026-11-12).
+    prompt += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation. First of all, respond to "
+              "what " + playerName + " just said: answer the question, take up the suggestion, and chat back about small "
+              "things the way people do. Everything above is background: your temperament, your past and how you feel "
+              "about " + playerName + " colour your tone, but not every line has to be about you or about " + playerName +
+              "'s past; bring those up only when the talk turns to them. If " + playerName + " calls you by your name, "
+              "race, class or a title, they mean you. Keep to the topic and do not greet again if you are already talking.";
 
     // Debug logging for full prompt including RAG information
     if (g_DebugEnabled && g_DebugShowFullPrompt) {

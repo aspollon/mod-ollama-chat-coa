@@ -504,7 +504,8 @@ std::string Rp_PromptSection(Player* bot, Player* player)
     if (mine != g_sheets.end() && mine->second.bot)
     {
         auto& f = mine->second.f;
-        out += " Who you are, keep to it: " + f["TI"] + ". " + Short(f["PE"], 300) + " Your past: " + Short(f["HI"], 450) +
+        out += " ABOUT YOU (your own background: it shapes how you speak, it is not a topic to bring up unasked): " +
+               f["TI"] + ". " + Short(f["PE"], 300) + " Your past: " + Short(f["HI"], 450) +
                (f["CU"].empty() ? std::string() : " Right now: " + Short(f["CU"], 150));
     }
     if (player && player != bot)
@@ -523,7 +524,8 @@ std::string Rp_PromptSection(Player* bot, Player* player)
             if (!f["HI"].empty()) about += " Their past, as far as people know: " + Short(f["HI"], 400);
             if (!f["CU"].empty()) about += " Right now: " + Short(f["CU"], 150);
             if (!about.empty())
-                out += " What " + player->GetName() + " shows of themselves:" + about;
+                out += " ABOUT " + player->GetName() + ", THE PERSON TALKING TO YOU (what you know of them; bring it up "
+                       "only when it fits the conversation):" + about;
         }
     }
     return out.empty() ? out : out + " ";
