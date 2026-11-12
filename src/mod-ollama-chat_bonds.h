@@ -3,8 +3,6 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
-#include <vector>
 
 class Creature;
 class Player;
@@ -49,8 +47,6 @@ struct BondStanding
     std::string lastTopic;
 };
 BondStanding Bond_Standing(uint64_t botGuid, uint64_t otherGuid);
-// Every bot that knows `otherGuid` (has talked or been through something with them), with its standing.
-std::vector<std::pair<uint64_t, BondStanding>> Bond_ListFor(uint64_t otherGuid);
 
 // What the modules of the bridge say about who the bot is right now; "" when none says anything.
 std::string Bond_PersonaSection(Player* bot);

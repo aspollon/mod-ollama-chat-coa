@@ -20,7 +20,6 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 
-#include <algorithm>
 #include <cctype>
 #include <map>
 #include <mutex>
@@ -142,24 +141,23 @@ namespace
                  "\t" + std::to_string(b.talks) + "\t" + std::to_string(b.shared) + "\t" + Cut(Encode(b.lastTopic), 150));
     }
 
-    // Every bot that knows the player, best friends first: bl <name> <standing> <affinity> <romance> <talks> <shared>,
-    // then be.
-    void SendBondList(Player* to)
+    // One character of the player's RP friends list: fr <name> <online> <zone> <standing> <affinity> <romance>.
+    void SendFriend(Player* to, std::string const& name)
     {
-        auto list = Bond_ListFor(to->GetGUID().GetRawValue());
-        std::sort(list.begin(), list.end(), [](auto const& a, auto const& b) { return a.second.affinity > b.second.affinity; });
-        size_t sent = 0;
-        for (auto const& [guid, b] : list)
+        ObjectGuid guid = sCharacterCache->GetCharacterGuidByName(name);
+        if (!guid)
         {
-            std::string name;
-            if (!sCharacterCache->GetCharacterNameByGuid(ObjectGuid(guid), name) || name.empty())
-                continue;
-            Send(to, "bl\t" + name + "\t" + b.standing + "\t" + std::to_string(b.affinity) + "\t" + std::to_string(b.romance) +
-                     "\t" + std::to_string(b.talks) + "\t" + std::to_string(b.shared));
-            if (++sent == 100)
-                break;
+            Send(to, "fr\t" + name + "\t-\t\tstranger\t0\t0");
+            return;
         }
-        Send(to, "be\t");
+        std::string zone;
+        Player* who = ObjectAccessor::FindConnectedPlayer(guid);
+        if (who && who->IsInWorld())
+            if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(who->GetZoneId()))
+                zone = area->area_name[0];
+        BondStanding b = Bond_Standing(guid.GetRawValue(), to->GetGUID().GetRawValue());
+        Send(to, "fr\t" + name + "\t" + (who ? "1" : "0") + "\t" + Cut(Encode(zone), 60) + "\t" + b.standing + "\t" +
+                 std::to_string(b.affinity) + "\t" + std::to_string(b.romance));
     }
 
     void Save(uint64_t guid)
@@ -358,8 +356,8 @@ namespace
                 g_dirty.insert(me);
             }
         }
-        else if (cmd == "bonds")
-            SendBondList(player);
+        else if (cmd == "friend" && p.size() >= 2)
+            SendFriend(player, p[1]);
         else if (cmd == "clear")
         {
             g_sheets.erase(me);

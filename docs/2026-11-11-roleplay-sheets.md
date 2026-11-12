@@ -19,13 +19,13 @@ Hidden addon whispers, prefix `AFKRP`, from the player to themselves; the server
     client: get\t<name>                    the whole sheet (a bot without one gets it written)
             peek\t<name>                   the title only, never written (tooltips)
             set\t<field>\t<seq>\t<last>\t<text>   one field of your own sheet, in pieces of ~190 bytes
-            bonds                          every bot that knows you (/rp bonds)
+            friend\t<name>                 one character of your RP friends list (online, zone, standing)
             clear                          delete your sheet
     server: f\t<name>\t<field>\t<seq>\t<last>\t<text>   a field, in pieces
             s\t<name>\t<state>             done | bot | writing | none | gone | failed | busy
             t\t<name>\t<title>             answer to peek
             b\t<name>\t<standing>\t<affection>\t<romance>\t<talks>\t<shared>\t<last topic>   with get, for a bot
-            bl\t<name>\t<standing>\t<affection>\t<romance>\t<talks>\t<shared>   one line of bonds; be ends the list
+            fr\t<name>\t<online>\t<zone>\t<standing>\t<affection>\t<romance>   answer to friend (online: 1, 0, - unknown)
 
 Standing (2026-11-12): the bond step the prompt uses (mod-ollama-chat_bonds.cpp `StandingOf`): stranger, enemy,
 dislike, distrust, know, like, friend, close, drawn, beloved. The add-on shows it as a reputation bar: the bar fills

@@ -369,19 +369,6 @@ BondStanding Bond_Standing(uint64_t botGuid, uint64_t otherGuid)
     return it == botIt->second.end() ? BondStanding() : ToStanding(it->second);
 }
 
-std::vector<std::pair<uint64_t, BondStanding>> Bond_ListFor(uint64_t otherGuid)
-{
-    std::vector<std::pair<uint64_t, BondStanding>> out;
-    std::lock_guard<std::mutex> lock(g_bondMutex);
-    for (auto const& [bot, people] : g_bonds)
-    {
-        auto it = people.find(otherGuid);
-        if (it != people.end() && it->second.talks + it->second.shared > 0)
-            out.emplace_back(bot, ToStanding(it->second));
-    }
-    return out;
-}
-
 std::string Bond_BuildPromptSection(Player* bot, Player* other)
 {
     if (!g_BondEnable || !bot || !other || IsBot(other))

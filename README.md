@@ -623,7 +623,7 @@ Pull requests, bug reports, and feature suggestions are welcome. Please adhere t
 
 ## Roleplay sheets (AFKRoleplay)
 
-The client add-on `client/AddOns/AFKRoleplay` (AFK Realm installs it with the module) shows a roleplay sheet for every character: `/rp` or the **RP** button on the target frame or the inspect window. Write your own with `/rp edit`. A bot's sheet shows how it stands with you as a reputation bar, and `/rp bonds` (or **Bonds** in the sheet) lists every bot that knows you; bots get theirs written by the language model (ahead of time while it is idle, else when opened). Bots read both when they talk. Settings: `OllamaChat.RP.*`. Details: `docs/2026-11-11-roleplay-sheets.md`.
+The client add-on `client/AddOns/AFKRoleplay` (AFK Realm installs it with the module) shows a roleplay sheet for every character: `/rp` or the **RP** button on the target frame or the inspect window. Write your own with `/rp edit`. A bot's sheet shows how it stands with you as a reputation bar; **Remember** puts a character on your RP friends list (`/rp friends`: online status, zone and standing); bots get theirs written by the language model (ahead of time while it is idle, else when opened). Bots read both when they talk. Settings: `OllamaChat.RP.*`. Details: `docs/2026-11-11-roleplay-sheets.md`.
 
 ## Bot surnames
 
