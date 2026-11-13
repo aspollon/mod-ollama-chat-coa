@@ -50,6 +50,7 @@ The rest of this file is the original's documentation; where it says `mod-ollama
 > - `AiPlayerbot.EnableGreet = 0` (disables greeting when invited)
 > - `AiPlayerbot.GuildFeedback = 0` (disables guild event chatting)
 > - `AiPlayerbot.RandomBotSayWithoutMaster = 0` (disables bots talking without a master)
+> - `AiPlayerbot.CoaLive.Chat.Enable = 0` (CoA playerbots: disables CoA Live, its own prewritten chat; this module's guild lines still go out)
 
 ## Overview
 

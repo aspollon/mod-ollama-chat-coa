@@ -21,6 +21,7 @@
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Guild.h"
+#include "GuildMgr.h"
 #include "Log.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
@@ -367,6 +368,19 @@ namespace
         return false;
     }
 
+    // Guild lines go out here, not by PlayerbotAI::SayToGuild: that one is shut by AiPlayerbot.CoaLive.Chat.Enable = 0,
+    // which AFK Realm sets so that only the language model talks.
+    bool SayToGuild(Player* bot, const std::string& text)
+    {
+        if (text.empty() || !bot->GetGuildId())
+            return false;
+        Guild* guild = sGuildMgr->GetGuildById(bot->GetGuildId());
+        if (!guild || !guild->HasRankRight(bot, GR_RIGHT_GCHATSPEAK))
+            return false;
+        guild->BroadcastToGuild(bot->GetSession(), false, text, LANG_UNIVERSAL);
+        return true;
+    }
+
     // Returns true when the line actually went out.
     bool RouteMessage(Player* bot, PlayerbotAI* botAI, const Completion& c,
                       const OllamaWorldSnapshot& world,
@@ -403,7 +417,7 @@ namespace
                     return false;
                 if (!world.GuildHasRealPlayer(bot->GetGuildId()))
                     return false;
-                return botAI->SayToGuild(c.text);
+                return SayToGuild(bot, c.text);
 
             case SRC_PARTY_LOCAL:
                 if (g_DisableForParty || !bot->GetGroup())

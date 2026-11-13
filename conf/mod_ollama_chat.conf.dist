@@ -472,8 +472,8 @@ OllamaChat.EventChatterRealPlayerDistance = 40.0
 
 # OllamaChat.EventChatterBotCommentChance
 #     Description: The percent chance (0–100) that an AI bot will respond to a game event another player generates.
-#     Default:     25
-OllamaChat.EventChatterBotCommentChance = 25
+#     Default:     5
+OllamaChat.EventChatterBotCommentChance = 5
 
 # OllamaChat.EventChatterBotSelfCommentChance
 #     Description: The percent chance (0–100) that an AI bot will respond to a game event it generates itself.
