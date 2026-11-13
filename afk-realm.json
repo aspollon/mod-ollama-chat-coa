@@ -170,6 +170,14 @@
       "why": "Room for what a bot went through with the people it knows, besides what it remembers of conversations."
     }
   ],
+  "patches": [
+    {
+      "name": "Surnames for the bots",
+      "target": "mod-playerbots",
+      "file": "patches/playerbots-bot-surnames.patch",
+      "why": "With AiPlayerbot.CoaBotSurname = 2 and no list of the realm's own, the random bots carry a surname of their people (Stonehammer for a Dwarf, Moonwhisper for a Night Elf) instead of one of mod-playerbots' neutral names."
+    }
+  ],
   "client": {
     "addons": [
       "client/AddOns/AFKRoleplay"
