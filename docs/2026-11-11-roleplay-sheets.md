@@ -36,5 +36,5 @@ Fields: NA name, TI title, AG age, HO home, AP looks, PE manner, HI history, CU 
 ## Names
 
 Bots' memories are keyed by guid; the cleanup that drops them when a guid changes hands compared whole names, so a
-surname change (AiPlayerbot.CoaBotSurname, patch `patches/playerbots-bot-surnames.patch`) would have wiped them.
+surname change (AiPlayerbot.CoaBotSurname) would have wiped them.
 It compares first names now, and `mod_ollama_chat_identity.name` holds the 25 characters of a two-word name.

@@ -170,14 +170,6 @@
       "why": "Room for what a bot went through with the people it knows, besides what it remembers of conversations."
     }
   ],
-  "patches": [
-    {
-      "name": "Surnames for the bots",
-      "target": "mod-playerbots",
-      "file": "patches/playerbots-bot-surnames.patch",
-      "why": "AiPlayerbot.CoaBotSurname chooses the random bots' surname: \"Bot\" (1, as before), one of their people such as Stonehammer or Moonwhisper (2), or none (0)."
-    }
-  ],
   "client": {
     "addons": [
       "client/AddOns/AFKRoleplay"
