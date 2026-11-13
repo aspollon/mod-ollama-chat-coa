@@ -336,7 +336,8 @@ void Bond_ApplyTone(uint64_t botGuid, uint64_t otherGuid, BondTone tone)
                 b.romance += b.affinity >= 40 ? 6 : (b.romance < 25 ? 2 : 0);
             break;
         case BondTone::Hostile:
-            b.affinity -= 6;
+            // One misjudged line alone must not make a new acquaintance distrust (below -5).
+            b.affinity -= 3;
             b.romance -= 10;
             break;
         default:

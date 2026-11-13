@@ -172,8 +172,8 @@
     {
       "file": "mod_ollama_chat.conf",
       "key": "OllamaChat.SentimentAnalysisPrompt",
-      "value": "\"How does this message sound to the one it is said to: \\\"{message}\\\"? Answer with one word only: FRIENDLY, ROMANTIC, HOSTILE or NEUTRAL.\"",
-      "why": "How a message sounds - friendly, romantic, hostile - moves the bond between the bot and the person."
+      "value": "\"Someone in a fantasy world says to another person: \\\"{message}\\\". Judge only how the speaker treats the listener, not the topic. Talking about fighting, killing, enemies, monsters, quests or danger is NEUTRAL. FRIENDLY: warm, kind, thankful or joking with the listener. ROMANTIC: flirting with the listener. HOSTILE: only an insult, a threat or contempt aimed at the listener. Answer with one word only: FRIENDLY, ROMANTIC, HOSTILE or NEUTRAL.\"",
+      "why": "How a message sounds moves the bond between the bot and the person; talk about fights and quests is not hostile, only an insult or threat aimed at the bot is."
     },
     {
       "file": "mod_ollama_chat.conf",
