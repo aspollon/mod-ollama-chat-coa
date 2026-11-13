@@ -647,7 +647,7 @@ void ProcessBotChatMessage(Player* bot, const std::string& msg, ChatChannelSourc
     PlayerBotChatHandler::ProcessChat(bot, type, lang, mutableMsg, sourceLocal, channel, nullptr, chainDepth);
 }
 
-std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, std::string playerMessage)
+std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, std::string playerMessage, bool withFooter)
 {
     if(!g_EnableChatHistory)
     {
@@ -677,10 +677,11 @@ std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, std::stri
         );
     }
 
-    result += SafeFormat(g_ChatHistoryFooterTemplate,
-        fmt::arg("player_name", playerName),
-        fmt::arg("player_message", playerMessage)
-    );
+    if (withFooter)
+        result += SafeFormat(g_ChatHistoryFooterTemplate,
+            fmt::arg("player_name", playerName),
+            fmt::arg("player_message", playerMessage)
+        );
 
     return result;
 }
@@ -2151,7 +2152,7 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     uint32_t playerGold             = player->GetMoney() / 10000;
     float playerDistance            = player->IsInWorld() && bot->IsInWorld() ? player->GetDistance(bot) : -1.0f;
 
-    std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage);
+    std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage, false);
     std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
 
     // Retrieve RAG information if enabled
@@ -2193,6 +2194,9 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("bot_map", botMapName)
     );
     
+    // Prompt order: what stays the same for this bot and this person first, then the talk so far, then what changes
+    // from line to line, then the new line. Ollama reuses the cached start of an unchanged prompt, so a long talk with
+    // one bot only reads its newest part; a changing value near the top makes it read everything again.
     std::string prompt = SafeFormat(
         g_ChatPromptTemplate,
         fmt::arg("bot_name", botName),
@@ -2203,11 +2207,31 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("player_level", playerLevel),
         fmt::arg("player_class", playerClass),
         fmt::arg("player_name", playerName),
-        fmt::arg("player_message", playerMessage),
-        fmt::arg("extra_info", extraInfo),
+        fmt::arg("player_message", std::string()),
+        fmt::arg("extra_info", std::string()),
         fmt::arg("chat_history", std::string()),
-        fmt::arg("sentiment_info", sentimentInfo)
+        fmt::arg("sentiment_info", std::string())
     );
+
+    // Race and class as a voice rather than as a stat line.
+    prompt += Roleplay_BuildVoicePrompt(bot);
+
+    // The bot's roleplay sheet, and what the player wrote on theirs (AFKRoleplay).
+    prompt += Rp_PromptSection(bot, player);
+
+    // Let the model gesture. The tag is parsed back out and stripped before
+    // the line is spoken, so it never reaches chat as text.
+    prompt += Expression_BuildGesturePrompt();
+    prompt += " If you do something while you speak, put it first between asterisks, in the third person and without "
+              "your name, the way an emote reads: *grins wickedly* or *looks at the scorch marks on her sleeve*. "
+              "Never describe the other person's looks or feelings for them.";
+
+    // The conversation so far: it only grows at its end, so it stays cached too.
+    if (!chatHistory.empty())
+        prompt += "\n" + chatHistory;
+
+    // What changes from line to line, so it comes after the cached part.
+    prompt += "\nRight now: " + extraInfo + " " + sentimentInfo;
 
     // Who the person is to this bot: stranger, friend, beloved, enemy; and what they last talked about.
     prompt += Bond_BuildPromptSection(bot, player);
@@ -2232,26 +2256,10 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
     // their own token budgets, so this cannot grow the prompt without limit.
     prompt += Memory_RecallMarker(bot, player, playerMessage);
 
-    // Race and class as a voice rather than as a stat line.
-    prompt += Roleplay_BuildVoicePrompt(bot);
-
-    // The bot's roleplay sheet, and what the player wrote on theirs (AFKRoleplay).
-    prompt += Rp_PromptSection(bot, player);
-
-    // Let the model gesture. The tag is parsed back out and stripped before
-    // the line is spoken, so it never reaches chat as text.
-    prompt += Expression_BuildGesturePrompt();
-    prompt += " If you do something while you speak, put it first between asterisks, in the third person and without "
-              "your name, the way an emote reads: *grins wickedly* or *looks at the scorch marks on her sleeve*. "
-              "Never describe the other person's looks or feelings for them.";
-
-    // The conversation so far and the new line come last: small models answer what they read last, and a message
+    // The new line comes last: small models answer what they read last, and a message
     // buried in the middle of the prompt is how a conversation loses its thread.
-    if (!chatHistory.empty())
-        prompt += "\n" + chatHistory;
-    else
-        prompt += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
-                                    fmt::arg("player_message", playerMessage));
+    prompt += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
+                                fmt::arg("player_message", playerMessage));
     // Answering comes first: small models otherwise act out the persona and the sheets in every line (2026-11-12).
     prompt += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation. First of all, respond to "
               "what " + playerName + " just said: answer the question, take up the suggestion, and chat back about small "

@@ -43,6 +43,7 @@ struct OllamaEndpointSettings
     std::string systemPrompt;
     std::string stop;
     std::string seed;
+    std::string keepAlive;   // Ollama keep_alive ("30m", "-1"); empty = Ollama's default
 
     // Wire format for `url`, and the credential it needs. The key is carried
     // here (not read from g_OllamaApiKey) for the same reason as everything

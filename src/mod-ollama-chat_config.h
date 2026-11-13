@@ -74,6 +74,8 @@ extern uint32_t    g_OllamaNumThreads;
 extern std::string g_OllamaStop;
 extern std::string g_OllamaSystemPrompt;
 extern std::string g_OllamaSeed;
+extern std::string g_OllamaKeepAlive;
+extern bool        g_OllamaLogTimings;
 
 // Optional sampling controls for response diversity. All default to "unset",
 // in which case the field is not sent at all and the model's default applies.

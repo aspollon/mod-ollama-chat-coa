@@ -135,6 +135,13 @@ namespace
         if (!cfg.systemPrompt.empty())
             request["system"] = SanitizeUTF8(cfg.systemPrompt);
 
+        // Keeps the model and its prompt cache loaded between lines; Ollama drops both after 5 idle minutes.
+        if (!cfg.keepAlive.empty())
+        {
+            try { request["keep_alive"] = std::stoi(cfg.keepAlive); }
+            catch (const std::exception&) { request["keep_alive"] = cfg.keepAlive; }
+        }
+
         // Always explicit. Some models keep reasoning switched on unless they
         // are told otherwise, so omitting the field is not the same as
         // disabling it. The old code also sent "hidethinking", which Ollama
@@ -459,6 +466,15 @@ namespace
                 if (parsed.contains("response") && parsed["response"].is_string())
                     text << parsed["response"].get<std::string>();
 
+                // Ollama's own clock: where a slow answer spent its time (load, reading the prompt, writing).
+                if (g_OllamaLogTimings && parsed.value("done", false) && parsed.contains("prompt_eval_count"))
+                {
+                    auto ms = [&parsed](const char* key) { return parsed.value(key, int64_t(0)) / 1000000; };
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] timing: load {} ms, prompt {} tokens in {} ms, answer {} tokens in {} ms",
+                        ms("load_duration"), parsed.value("prompt_eval_count", 0), ms("prompt_eval_duration"),
+                        parsed.value("eval_count", 0), ms("eval_duration"));
+                }
+
                 // Native reasoning arrives here, separate from "response".
                 if (parsed.contains("thinking") && parsed["thinking"].is_string())
                     thinking << parsed["thinking"].get<std::string>();
@@ -550,6 +566,7 @@ void OllamaConfig_Publish()
     next.systemPrompt     = g_OllamaSystemPrompt;
     next.stop             = g_OllamaStop;
     next.seed             = g_OllamaSeed;
+    next.keepAlive        = g_OllamaKeepAlive;
     next.numPredict       = g_OllamaNumPredict;
     next.numCtx           = g_OllamaNumCtx;
     next.numThreads       = g_OllamaNumThreads;
