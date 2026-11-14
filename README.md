@@ -16,7 +16,7 @@ What is different from the original:
 - Conversations: a person who targets a bot, or who is talking with one, is answered by that bot alone, without naming it every time. Names count the way people type them (`klaus` or `klaus dieter` for Klausdieter, one typo). A line said to nobody in particular gets one answer, not a chorus. The conversation so far (the last ten exchanges) and the new line come last in the prompt, so the bot keeps the thread.
 - Bots know what they are doing: the time of day, a fight, a flight, riding, resting, the dungeon they are in, their companions and open quests, and how close the person is.
 - Bots speak to people first: when a bot's turn to talk comes while a person stands near it, it may speak to them by name (`OllamaChat.Approach.Chance`, `OllamaChat.Approach.CooldownMinutes`); the person answers without naming it.
-- Actions written into a reply (`*grins wickedly* Well met.`) become an emote line in the third person ("Klausdieter grins wickedly.") before the spoken words.
+- Spoken words and actions are separated by double quotes: everything the bot says is inside the quotes, everything outside them is an emote line in the third person ("Klausdieter grins wickedly.") sent before the spoken words. Asterisks and bare stage directions are still recognised for models that do not quote.
 - Answers that repeat the prompt or the bot's last line are asked for again.
 - Bots know the world, built into the module (no files, no RAG): the story of every CoA and CoA Custom people, the order or tradition of every CoA class, every zone of the old world, Outland and Northrend with its capitals, and the persons, orders and events of the time of the Lich King. A bot knows its own people, calling and place, something of the people of whoever it talks to, and what a message names ("Arthas", "Gilneas", "the Scourge"). With mod-world-journey it knows how far along the road to Outland and Northrend it is, in words, never in levels (`OllamaChat.Lore.Enable`, `OllamaChat.Lore.MaxTopics`). The tables are in `src/mod-ollama-chat_lore_data.cpp`.
 - `OllamaChat.NumCtx = 8192`: room for all of that; with a model's short default the instructions at the start of the prompt were cut off.
@@ -504,15 +504,17 @@ a log line.
   line lands. Skipped while moving, casting, in combat, in flight, on a
   transport, or teleporting.
 - **Actions and gestures** — what a bot does is a text emote (`/em ...`), never
-  part of the spoken words. The model writes it at the very start between
-  single asterisks, in the third person: `*rutscht auf dem Stuhl hin und her und
-  kichert* Hallo. The module sends that as an emote and says the rest as the
-  chat line. Actions the model slips into the middle of a sentence are removed
-  from the speech and sent as the emote as well. `[emote:wave]`, `*waves*` and
-  a bare `/wave` are still recognised as optional game animations, because
-  models emit those unprompted. Emotes are played through the same code path the
-  client uses, so nearby players see both the animation and the "Bot waves at
-  You." social text, with the correct per-race and per-gender variant.
+  part of the spoken words. The model writes everything it says inside double
+  quotes and everything it does outside them, in the third person:
+  `*rutscht auf dem Stuhl hin und her und kichert* "Hallo." The module sends the
+  outside text as an emote and says the quoted words as the chat line. Actions
+  the model slips into the middle of a sentence are removed from the speech and
+  sent as the emote as well. `[emote:wave]`, `*waves*` and a bare `/wave` are
+  still recognised as optional game animations, because models emit those
+  unprompted; asterisks and bare stage directions remain a fallback for models
+  that do not quote. Emotes are played through the same code path the client
+  uses, so nearby players see both the animation and the "Bot waves at You."
+  social text, with the correct per-race and per-gender variant.
 - **Emote reactions** — bots react when a player emotes at them, either by
   mirroring (wave gets a wave), countering (flex gets a laugh), or answering in
   words. The first two cost no LLM call.
