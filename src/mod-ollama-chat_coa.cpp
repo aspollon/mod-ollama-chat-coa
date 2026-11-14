@@ -537,6 +537,75 @@ namespace
         return text.size() == word.size() || !IsWordByte(static_cast<unsigned char>(text[word.size()]));
     }
 
+    // A third-person action can still carry the model's first-person view ("adjusts the collar of my cloak").
+    // The emote is read about the bot, so those words become their/them, and the German equivalents.
+    std::string ReplaceFirstPerson(std::string text)
+    {
+        static const std::unordered_map<std::string, std::string> swaps = {
+            { "my", "their" }, { "me", "them" }, { "mine", "theirs" }, { "myself", "themselves" },
+            { "our", "their" }, { "ours", "theirs" }, { "ourselves", "themselves" },
+            { "us", "them" }, { "we", "they" },
+            { "mein", "ihr" }, { "meine", "ihre" }, { "meinen", "ihren" }, { "meinem", "ihrem" },
+            { "meiner", "ihrer" }, { "mich", "sich" }, { "mir", "sich" }, { "uns", "sie" },
+        };
+
+        std::string out;
+        out.reserve(text.size());
+        for (size_t i = 0; i < text.size();)
+        {
+            if (!IsWordByte(static_cast<unsigned char>(text[i])))
+            {
+                out += text[i++];
+                continue;
+            }
+            size_t j = i;
+            while (j < text.size() && IsWordByte(static_cast<unsigned char>(text[j])))
+                ++j;
+            const std::string word = text.substr(i, j - i);
+            auto it = swaps.find(Lower(word));
+            out += it == swaps.end() ? word : it->second;
+            i = j;
+        }
+        return out;
+    }
+
+    // Small models run two sentences together inside one action: "glances down at the item in hand The silver
+    // ring glints". Put the full stop back before a new sentence, but not after a preposition ("at The Black Temple").
+    std::string SeparateActionSentences(std::string text)
+    {
+        static const std::unordered_set<std::string> joins = {
+            "the", "a", "an", "and", "but", "or", "nor", "yet", "so", "because", "if", "when", "while",
+            "though", "although", "since", "until", "unless", "after", "before", "as", "than", "that",
+            "which", "who", "at", "in", "of", "to", "with", "on", "by", "for", "from", "into", "over",
+            "under", "near", "through", "against", "around", "behind", "beside", "between", "beyond",
+            "during", "inside", "outside", "toward", "towards", "upon", "onto", "across", "along",
+            "among", "within", "without", "via", "like"
+        };
+        static const std::vector<std::string> starters = { " The ", " A ", " He ", " She ", " It ",
+                                                           " They ", " You " };
+        for (const std::string& starter : starters)
+        {
+            for (size_t p = 0; (p = text.find(starter, p)) != std::string::npos;)
+            {
+                size_t e = p;
+                while (e > 0 && text[e - 1] == ' ')
+                    --e;
+                size_t s = e;
+                while (s > 0 && IsWordByte(static_cast<unsigned char>(text[s - 1])))
+                    --s;
+                const std::string prev = Lower(text.substr(s, e - s));
+                if (!prev.empty() && joins.find(prev) == joins.end())
+                {
+                    text.replace(p, starter.size(), "." + starter);
+                    p += starter.size() + 1;
+                }
+                else
+                    p += starter.size();
+            }
+        }
+        return text;
+    }
+
     // "Klaus grins", "He grins", "I grin", "Ich grinse" -> "grins"/"grinst": the game puts the name in front itself.
     std::string ThirdPerson(std::string action, const std::string& botName)
     {
@@ -663,6 +732,8 @@ namespace
             if (it != third.end())
                 action.replace(0, first.size(), it->second);
         }
+        action = ReplaceFirstPerson(action);
+        action = SeparateActionSentences(action);
         // "You look singed" written as an action is how the model narrates for the reader; as an emote it reads
         // "<Name> looks at you ...". Leave anything else as it is.
         while (!action.empty() && (action.back() == '.' || action.back() == ' '))
@@ -952,6 +1023,38 @@ namespace
         return false;
     }
 
+    // "I pause, my gaze fixed on ..." is a stage direction the model forgot to put in asterisks.
+    // Only verbs of posture and movement count; "I think" or "I want" stay spoken words.
+    bool IsFirstPersonAction(const std::string& text)
+    {
+        const std::string t = TrimCopy(text);
+        if (!StartsWithWordCI(t, "I"))
+            return false;
+
+        const std::string after = TrimCopy(t.substr(1));
+        const size_t end = after.find_first_of(" \t,;.!?");
+        const std::string verb = Lower(after.substr(0, end));
+        static const std::vector<std::string> verbs = {
+            "pause", "pauses", "paused", "glance", "glances", "glanced", "look", "looks", "looked",
+            "smile", "smiles", "smiled", "grin", "grins", "grinned", "nod", "nods", "nodded",
+            "sigh", "sighs", "sighed", "shift", "shifts", "shifted", "adjust", "adjusts", "adjusted",
+            "rub", "rubs", "rubbed", "raise", "raises", "raised", "cross", "crosses", "crossed",
+            "shake", "shakes", "shook", "step", "steps", "stepped", "turn", "turns", "turned",
+            "stand", "stands", "stood", "sit", "sits", "sat", "fold", "folds", "folded",
+            "frown", "frowns", "frowned", "blink", "blinks", "blinked", "exhale", "exhales", "exhaled",
+            "mutter", "mutters", "muttered", "gaze", "gazes", "gazed", "watch", "watches", "watched",
+            "study", "studies", "studied", "consider", "considers", "considered", "lower", "lowers", "lowered",
+            "lift", "lifts", "lifted", "tilt", "tilts", "tilted", "lean", "leans", "leaned",
+            "straighten", "straightens", "straightened", "brush", "brushes", "brushed",
+            "smooth", "smooths", "smoothed", "clench", "clenches", "clenched", "relax", "relaxes", "relaxed",
+            "breathe", "breathes", "breathed", "swallow", "swallows", "swallowed", "wince", "winces", "winced",
+            "chuckle", "chuckles", "chuckled", "laugh", "laughs", "laughed", "shiver", "shivers", "shivered",
+            "tremble", "trembles", "trembled", "hesitate", "hesitates", "hesitated", "stop", "stops", "stopped",
+            "wait", "waits", "waited", "kneel", "kneels", "knelt", "bow", "bows", "bowed",
+        };
+        return std::find(verbs.begin(), verbs.end(), verb) != verbs.end();
+    }
+
     bool IsSpeechVerb(const std::string& word)
     {
         static const std::vector<std::string> verbs = {
@@ -1140,6 +1243,20 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
         reply = TakeMidTextActions(reply, actions, botName);
         reply = TrimCopy(reply);
         return actions;
+    }
+
+    // The model sometimes writes a first-person stage direction without any marker at all:
+    // "I pause, my gaze fixed on the crystal ...". Treat the whole line as the action; the
+    // direct-address retry below asks for words if the emote is all it produced.
+    if (reply.find('"') == std::string::npos && reply.find('*') == std::string::npos &&
+        reply.find('(') == std::string::npos && IsFirstPersonAction(reply))
+    {
+        const std::string action = ThirdPerson(reply, botName);
+        if (!action.empty())
+        {
+            reply.clear();
+            return action;
+        }
     }
 
     auto take = [&](size_t start, size_t end, size_t innerStart, size_t innerEnd,

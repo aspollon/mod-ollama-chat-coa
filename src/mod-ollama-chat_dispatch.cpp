@@ -400,16 +400,20 @@ namespace
                     last = it->second;
             }
             bool repeated = !text.empty() && !last.empty() && Governor_Similarity(text, last) >= 0.8f;
-            if ((text.empty() && action.empty()) || repeated)
+            const bool actionOnly = text.empty() && !action.empty();
+            if ((text.empty() && action.empty()) || actionOnly || repeated)
             {
                 if (g_DebugEnabled && repeated)
                     LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} repeated itself ('{}'); asking once more.",
                              task.request.botName, text);
-                std::string again = prompt +
-                    " Answer with only the words you say, and say something new: do not repeat anything you said before.";
-                std::string againTurn = turnPrompt.empty()
-                    ? std::string()
-                    : turnPrompt + " Answer with only the words you say, and say something new: do not repeat anything you said before.";
+                if (g_DebugEnabled && actionOnly)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} answered with only an action ('{}'); asking for words.",
+                             task.request.botName, action);
+                const std::string ask =
+                    " Answer with the words you say inside double quotes, and say something new: do not repeat "
+                    "anything you said before. An action alone is not an answer.";
+                std::string again = prompt + ask;
+                std::string againTurn = turnPrompt.empty() ? std::string() : turnPrompt + ask;
                 uint32_t emote2 = 0;
                 std::string action2;
                 std::string second = Generate(task, again, againTurn, emote2, action2);
