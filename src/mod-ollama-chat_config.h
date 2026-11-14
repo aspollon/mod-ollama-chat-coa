@@ -136,6 +136,7 @@ extern std::string g_DefaultPersonalityPrompt;
 // Chat History Templates and Toggles
 // --------------------------------------------
 extern bool        g_EnableChatHistory;
+extern bool        g_ReuseConversationContext;
 extern std::string g_ChatHistoryHeaderTemplate;
 extern std::string g_ChatHistoryLineTemplate;
 extern std::string g_ChatHistoryFooterTemplate;

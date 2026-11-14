@@ -24,6 +24,11 @@ namespace
     std::mutex             g_settingsMutex;
     OllamaEndpointSettings g_settings;
 
+    // A conversation context belongs to the model, URL and system prompt it
+    // was produced with. Every republish bumps this so no cached context can
+    // outlive a `.ollama reload`.
+    std::atomic<uint32_t> g_settingsGeneration{ 0 };
+
     // Per-session self-heals for OpenAI-format endpoints, learned from one
     // HTTP 400 each and remembered so the next request does not repeat it:
     //  - newer OpenAI models reject `max_tokens` and want
@@ -74,7 +79,8 @@ namespace
     nlohmann::json BuildOllamaRequest(const OllamaEndpointSettings& cfg,
                                       const std::string& prompt,
                                       const OllamaThinkRequest& think,
-                                      uint32_t reasoningReserve)
+                                      uint32_t reasoningReserve,
+                                      const std::vector<int>* context)
     {
         nlohmann::json request = {
             { "model",  cfg.model },
@@ -132,7 +138,12 @@ namespace
                 request["stop"] = stopSeqs;
         }
 
-        if (!cfg.systemPrompt.empty())
+        // A context already contains the system prompt from its first turn.
+        // Ollama renders `system` in front of the new prompt, so sending it
+        // again would put a second system message in the middle of the talk.
+        if (context && !context->empty())
+            request["context"] = *context;
+        else if (!cfg.systemPrompt.empty())
             request["system"] = SanitizeUTF8(cfg.systemPrompt);
 
         // Keeps the model and its prompt cache loaded between lines; Ollama drops both after 5 idle minutes.
@@ -288,13 +299,14 @@ namespace
     nlohmann::json BuildRequest(const OllamaEndpointSettings& cfg,
                                 const std::string& prompt,
                                 const OllamaThinkRequest& think,
-                                uint32_t reasoningReserve)
+                                uint32_t reasoningReserve,
+                                const std::vector<int>* context)
     {
         switch (cfg.provider)
         {
             case OllamaProvider::OpenAI:    return BuildOpenAIRequest(cfg, prompt, think, reasoningReserve);
             case OllamaProvider::Anthropic: return BuildAnthropicRequest(cfg, prompt, think, reasoningReserve);
-            default:                        return BuildOllamaRequest(cfg, prompt, think, reasoningReserve);
+            default:                        return BuildOllamaRequest(cfg, prompt, think, reasoningReserve, context);
         }
     }
 
@@ -436,11 +448,11 @@ namespace
     // Ollama answers non-streaming requests with a single JSON object, but the
     // streaming shape (one object per line) still shows up behind some proxies,
     // so accumulate across lines either way.
-    void ParseGenerateBody(const std::string& body, std::string& outText,
-                           std::string& outThinking, std::string& outError)
+    void ParseGenerateBody(const std::string& body, OllamaApiResult& result)
     {
         std::ostringstream text;
         std::ostringstream thinking;
+        std::vector<int>   context;
         bool parsedAny = false;
 
         std::stringstream ss(body);
@@ -459,7 +471,7 @@ namespace
 
                 if (parsed.contains("error") && parsed["error"].is_string())
                 {
-                    outError = parsed["error"].get<std::string>();
+                    result.error = parsed["error"].get<std::string>();
                     continue;
                 }
 
@@ -470,9 +482,30 @@ namespace
                 if (g_OllamaLogTimings && parsed.value("done", false) && parsed.contains("prompt_eval_count"))
                 {
                     auto ms = [&parsed](const char* key) { return parsed.value(key, int64_t(0)) / 1000000; };
-                    LOG_INFO("module.ollamachat", "[Ollama Chat] timing: load {} ms, prompt {} tokens in {} ms, answer {} tokens in {} ms",
-                        ms("load_duration"), parsed.value("prompt_eval_count", 0), ms("prompt_eval_duration"),
+                    LOG_INFO("module.ollamachat",
+                        "[Ollama Chat] timing: load {} ms, prompt {} tokens ({} cached) in {} ms, answer {} tokens in {} ms",
+                        ms("load_duration"), parsed.value("prompt_eval_count", 0),
+                        parsed.value("prompt_eval_cached_count", 0), ms("prompt_eval_duration"),
                         parsed.value("eval_count", 0), ms("eval_duration"));
+                }
+
+                if (parsed.contains("prompt_eval_count") && parsed["prompt_eval_count"].is_number_integer())
+                    result.promptEvalCount = parsed["prompt_eval_count"].get<int>();
+                if (parsed.contains("prompt_eval_cached_count") && parsed["prompt_eval_cached_count"].is_number_integer())
+                    result.promptEvalCachedCount = parsed["prompt_eval_cached_count"].get<int>();
+
+                // The tokenized prompt plus everything generated. The next turn
+                // sends this back so only the new line has to be read.
+                if (parsed.contains("context") && parsed["context"].is_array())
+                {
+                    std::vector<int> next;
+                    next.reserve(parsed["context"].size());
+                    for (const auto& token : parsed["context"])
+                    {
+                        if (token.is_number_integer())
+                            next.push_back(token.get<int>());
+                    }
+                    context = std::move(next);
                 }
 
                 // Native reasoning arrives here, separate from "response".
@@ -481,22 +514,25 @@ namespace
             }
             catch (const std::exception& e)
             {
-                if (outError.empty())
-                    outError = std::string("JSON parse failure: ") + e.what();
+                if (result.error.empty())
+                    result.error = std::string("JSON parse failure: ") + e.what();
             }
         }
 
-        if (!parsedAny && outError.empty())
-            outError = "no JSON object in response body";
+        if (!parsedAny && result.error.empty())
+            result.error = "no JSON object in response body";
 
-        outText     = text.str();
-        outThinking = thinking.str();
+        result.text     = text.str();
+        result.thinking = thinking.str();
+        if (!context.empty())
+            result.context = std::move(context);
     }
 
     OllamaApiResult PerformOnce(const OllamaEndpointSettings& cfg,
                                 const std::string& prompt,
                                 const OllamaThinkRequest& think,
-                                uint32_t reasoningReserve)
+                                uint32_t reasoningReserve,
+                                const std::vector<int>* context)
     {
         OllamaApiResult result;
 
@@ -504,7 +540,7 @@ namespace
         // model does on its own is not something backing think off can fix.
         result.thinkUsed = think.wanted;
 
-        const nlohmann::json request = BuildRequest(cfg, prompt, think, reasoningReserve);
+        const nlohmann::json request = BuildRequest(cfg, prompt, think, reasoningReserve, context);
 
         const auto started = std::chrono::steady_clock::now();
         OllamaHttpResult http = t_httpClient.PostEx(cfg.url, request.dump(), 0,
@@ -541,7 +577,8 @@ namespace
                 ParseAnthropicBody(http.body, result.text, result.thinking, parseError);
                 break;
             default:
-                ParseGenerateBody(http.body, result.text, result.thinking, parseError);
+                ParseGenerateBody(http.body, result);
+                parseError = result.error;
                 break;
         }
 
@@ -594,12 +631,18 @@ void OllamaConfig_Publish()
 
     std::lock_guard<std::mutex> lock(g_settingsMutex);
     g_settings = std::move(next);
+    ++g_settingsGeneration;
 }
 
 OllamaEndpointSettings OllamaConfig_Snapshot()
 {
     std::lock_guard<std::mutex> lock(g_settingsMutex);
     return g_settings;
+}
+
+uint32_t OllamaConfig_Generation()
+{
+    return g_settingsGeneration.load();
 }
 
 OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
@@ -641,7 +684,8 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg)
     return headers;
 }
 
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t maxTokens)
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind,
+                            uint32_t maxTokens, const std::vector<int>* context)
 {
     OllamaApiResult result;
 
@@ -677,7 +721,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     // for: a throttled provider slows replies down instead of losing them.
     auto performWithBackoff = [&](OllamaThinkRequest& req, uint32_t budget)
     {
-        OllamaApiResult r = PerformOnce(cfg, prompt, req, budget);
+        OllamaApiResult r = PerformOnce(cfg, prompt, req, budget, context);
 
         for (uint32_t attempt = 0;
              attempt < g_RateLimitRetries && !r.ok && IsRateLimited(r.status);
@@ -702,7 +746,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
                          r.status, attempt + 1, g_RateLimitRetries, wait);
 
             std::this_thread::sleep_for(std::chrono::seconds(wait));
-            r = PerformOnce(cfg, prompt, req, budget);
+            r = PerformOnce(cfg, prompt, req, budget, context);
         }
 
         return r;
@@ -726,7 +770,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
                     LOG_INFO("module.ollamachat",
                              "[Ollama Chat] Model '{}' wants max_completion_tokens instead of "
                              "max_tokens; switching for the rest of this session.", cfg.model);
-                r = PerformOnce(cfg, prompt, req, budget);
+                r = PerformOnce(cfg, prompt, req, budget, context);
             }
             else if (!g_samplingRejected.load() &&
                      (lower.find("unsupported") != std::string::npos ||
@@ -742,7 +786,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
                              "[Ollama Chat] Model '{}' rejects explicit sampling parameters "
                              "(temperature/top_p/penalties); sending its defaults for the rest "
                              "of this session.", cfg.model);
-                r = PerformOnce(cfg, prompt, req, budget);
+                r = PerformOnce(cfg, prompt, req, budget, context);
             }
         }
 
@@ -753,7 +797,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
         {
             OllamaCapability_NoteEffortLevelRejected();
             req.level.clear();
-            r = PerformOnce(cfg, prompt, req, budget);
+            r = PerformOnce(cfg, prompt, req, budget, context);
         }
 
         return r;
@@ -768,7 +812,7 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     {
         OllamaCapability_NoteThinkRejected();
         think  = OllamaThinkRequest{};
-        result = PerformOnce(cfg, prompt, think, 0);
+        result = PerformOnce(cfg, prompt, think, 0, context);
     }
 
     // Self-heal: HTTP 200, reasoning present, answer empty. The model spent
@@ -776,7 +820,12 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
     // small to cover reasoning plus a reply. Remember that this model reasons
     // unconditionally, re-resolve (which now yields the low effort level), and
     // retry with headroom so this message is not lost.
-    if (result.ok && result.text.empty() && !result.thinking.empty() &&
+    //
+    // Not for a continued conversation: that response already extended the
+    // context, so resending the same prompt would duplicate it. The caller
+    // retries with the new context instead.
+    if (!(context && !context->empty()) &&
+        result.ok && result.text.empty() && !result.thinking.empty() &&
         cfg.numPredict > 0 && reserve == 0 && g_ReasoningTokenReserve > 0)
     {
         if (!think.wanted)
@@ -829,8 +878,9 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, u
                                     : (think.enabled ? std::string("yes") : std::string("no"));
 
         LOG_INFO("module.ollamachat",
-                 "[Ollama Chat] Generation ok in {}ms (think={}), {} chars.",
-                 result.latencyMs, thinkText, result.text.size());
+                 "[Ollama Chat] Generation ok in {}ms (think={}), {} chars; prompt {} tokens ({} cached).",
+                 result.latencyMs, thinkText, result.text.size(),
+                 result.promptEvalCount, result.promptEvalCachedCount);
 
         if (g_DebugShowFullPrompt && !result.thinking.empty())
             LOG_INFO("module.ollamachat", "[Ollama Chat] Model reasoning: {}", result.thinking);

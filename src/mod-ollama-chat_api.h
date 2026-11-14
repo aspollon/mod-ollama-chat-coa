@@ -5,6 +5,7 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_httpclient.h"
 #include <string>
+#include <vector>
 #include <cstdint>
 
 // Result of one generation call. The old API returned a bare string, so
@@ -21,6 +22,16 @@ struct OllamaApiResult
     uint64_t    latencyMs = 0;
     bool        thinkUsed = false;
     int         retryAfterSeconds = 0;   // provider's Retry-After on 429/503, else 0
+
+    // Ollama's tokenized conversation state: the rendered prompt plus
+    // everything the model generated. The next turn sends this back so only
+    // the new line has to be read, instead of the whole character sheet.
+    std::vector<int> context;
+
+    // Prompt-cache visibility for the debug log: how much of the request the
+    // runner had to read and how much it already had.
+    int promptEvalCount       = 0;
+    int promptEvalCachedCount = 0;
 
     bool empty() const { return text.empty(); }
 };
@@ -88,8 +99,20 @@ OllamaHttpHeaders OllamaBuildRequestHeaders(const OllamaEndpointSettings& cfg);
 // capability, and transparently retries once without thinking if the
 // provider rejects the request for asking.
 //
+// maxTokens > 0 replaces NumPredict (a roleplay sheet is longer than a chat
+// line). `context` is the token array returned by a previous Ollama call:
+// when it is non-empty the prompt is the next turn of that conversation and
+// the character sheet is not sent again. Ollama renders `system` in front of
+// the new prompt, so the system prompt is omitted on those turns.
+//
 // Blocking. Call from a worker thread, never from the world thread.
-OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind, uint32_t maxTokens = 0);   // maxTokens > 0 replaces NumPredict
+OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind,
+                            uint32_t maxTokens = 0,
+                            const std::vector<int>* context = nullptr);
+
+// Bumped by OllamaConfig_Publish. A context belongs to the model, URL and
+// system prompt it was produced with, so the cache refuses older entries.
+uint32_t OllamaConfig_Generation();
 
 // Legacy shim: returns the text, or empty on any failure.
 std::string QueryOllamaAPI(const std::string& prompt);

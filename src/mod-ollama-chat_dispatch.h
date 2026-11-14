@@ -76,6 +76,13 @@ struct OllamaChatRequest
 
     // Generation.
     std::string       prompt;
+    // The per-turn part of the prompt. When a stored Ollama context exists,
+    // only this part is sent; the character sheet, lore, voice and the talk so
+    // far are already in the context. Empty means "always send the full prompt".
+    std::string       turnPrompt;
+    // Hash of the static part the context was built from. A level-up, zone
+    // change or edited roleplay sheet makes the context stale.
+    uint64_t          sessionHash = 0;
     OllamaRequestKind kind = OllamaRequestKind::ChatReply;
 
     // Resolved on the world thread before submission so the worker never has
@@ -99,6 +106,12 @@ struct OllamaChatRequest
 // Submit a request. Returns false when the queue is at MaxQueueDepth, in which
 // case the caller should simply skip this bot rather than pile up backlog.
 bool OllamaDispatch_Submit(OllamaChatRequest request);
+
+// Drop the stored conversation context for one pair or for everything a
+// character is part of. A context is a snapshot of one conversation; when the
+// history is deleted or a character leaves, it must not be continued.
+void OllamaDispatch_ForgetConversation(uint64_t botGuid, uint64_t targetGuid);
+void OllamaDispatch_ForgetConversations(uint64_t guid);
 
 // Drain finished generations and deliver them. World thread only.
 void OllamaDispatch_Update(uint32_t diff);

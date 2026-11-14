@@ -26,6 +26,7 @@
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <algorithm>
+#include <functional>
 #include <random>
 #include <cctype>
 #include <chrono>
@@ -1834,8 +1835,8 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
             continue;
         }
 
-        std::string prompt = GenerateBotPrompt(bot, msg, player);
-        if (prompt.empty())
+        BotPromptParts parts = GenerateBotPromptParts(bot, msg, player);
+        if (parts.Full().empty())
             continue;
 
         OllamaChatRequest request;
@@ -1847,7 +1848,9 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         request.chainDepth  = chainDepth;
         request.directAddress = directAddress;
         request.scopeKey    = scopeKey;
-        request.prompt      = std::move(prompt);
+        request.prompt      = parts.Full();
+        request.turnPrompt  = std::move(parts.turn);
+        request.sessionHash = parts.staticHash;
         request.botName     = bot->GetName();
         request.originMessage = msg;
         request.kind = (g_RoleplayEnable && g_RoleplayStrictness >= 1)
@@ -2098,22 +2101,24 @@ std::string OllamaDescribeSituation(Player* bot, Player* player)
     return out;
 }
 
-std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player)
-{  
+BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Player* player)
+{
+    BotPromptParts parts;
+
     if (!bot || !player) {
-        return "";
+        return parts;
     }
     PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
     if (botAI == nullptr) {
-        return "";
+        return parts;
     }
     ChatHelper* helper = botAI->GetChatHelper();
     if (helper == nullptr) {
-        return "";
+        return parts;
     }
     if (g_ChatPromptTemplate.empty()) {
         LOG_ERROR("module.ollamachat", "[Ollama Chat] GenerateBotPrompt: template is empty");
-        return "";
+        return parts;
     }
 
     AreaTableEntry const* botCurrentArea = botAI->GetCurrentArea();
@@ -2193,11 +2198,11 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("bot_zone", botZoneName),
         fmt::arg("bot_map", botMapName)
     );
-    
-    // Prompt order: what stays the same for this bot and this person first, then the talk so far, then what changes
-    // from line to line, then the new line. Ollama reuses the cached start of an unchanged prompt, so a long talk with
-    // one bot only reads its newest part; a changing value near the top makes it read everything again.
-    std::string prompt = SafeFormat(
+
+    // The static part: who this bot is, what it knows, how it speaks, its
+    // roleplay sheet and the player's. A stored Ollama context keeps this, so
+    // it is sent once per conversation instead of once per line.
+    std::string staticPrompt = SafeFormat(
         g_ChatPromptTemplate,
         fmt::arg("bot_name", botName),
         fmt::arg("bot_level", botLevel),
@@ -2213,67 +2218,83 @@ std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* pl
         fmt::arg("sentiment_info", std::string())
     );
 
+    // What the bot knows of its own people, calling, place and the other
+    // person's people. What the current message names goes in the turn.
+    staticPrompt += Lore_BuildStaticSection(bot, player);
+
     // Race and class as a voice rather than as a stat line.
-    prompt += Roleplay_BuildVoicePrompt(bot);
+    staticPrompt += Roleplay_BuildVoicePrompt(bot);
 
     // The bot's roleplay sheet, and what the player wrote on theirs (AFKRoleplay).
-    prompt += Rp_PromptSection(bot, player);
+    staticPrompt += Rp_PromptSection(bot, player);
 
-    // Let the model gesture. The tag is parsed back out and stripped before
-    // the line is spoken, so it never reaches chat as text.
-    prompt += Expression_BuildGesturePrompt();
-    prompt += " If you do something while you speak, put it first between asterisks, in the third person and without "
-              "your name, the way an emote reads: *grins wickedly* or *looks at the scorch marks on her sleeve*. "
-              "Never describe the other person's looks or feelings for them.";
+    parts.staticPrompt = std::move(staticPrompt);
+    parts.history      = chatHistory.empty() ? std::string() : ("\n" + chatHistory);
+    parts.staticHash   = std::hash<std::string>{}(parts.staticPrompt);
 
-    // The conversation so far: it only grows at its end, so it stays cached too.
-    if (!chatHistory.empty())
-        prompt += "\n" + chatHistory;
-
-    // What changes from line to line, so it comes after the cached part.
-    prompt += "\nRight now: " + extraInfo + " " + sentimentInfo;
+    // The turn: what is true right now, what this message brought up, and the
+    // new line. None of this belongs in the static prefix.
+    std::string turn;
+    turn += "\nRight now: " + extraInfo + " " + sentimentInfo;
 
     // Who the person is to this bot: stranger, friend, beloved, enemy; and what they last talked about.
-    prompt += Bond_BuildPromptSection(bot, player);
+    turn += Bond_BuildPromptSection(bot, player);
 
     // Where the bot is and what it is doing, so it can talk from inside its own day.
-    prompt += " " + OllamaDescribeSituation(bot, player);
+    turn += " " + OllamaDescribeSituation(bot, player);
 
-    // What the bot knows: its people, its calling, this place, and whatever the message names.
-    prompt += Lore_BuildSection(bot, player, playerMessage);
+    // What this message names.
+    turn += Lore_BuildTopicSection(bot, player, playerMessage);
 
     // Add RAG information to the prompt if available
     if (!ragInfo.empty()) {
-        prompt += ragInfo + "\n";
+        turn += ragInfo + "\n";
     }
 
-    if(g_EnableChatBotSnapshotTemplate)
-    {
-        prompt += GenerateBotGameStateSnapshot(bot);
-    }
+    if (g_EnableChatBotSnapshotTemplate)
+        turn += GenerateBotGameStateSnapshot(bot);
 
     // What this bot remembers, and how it feels about people. Bounded by
     // their own token budgets, so this cannot grow the prompt without limit.
-    prompt += Memory_RecallMarker(bot, player, playerMessage);
+    turn += Memory_RecallMarker(bot, player, playerMessage);
+
+    // Let the model gesture. The tag is parsed back out and stripped before
+    // the line is spoken, so it never reaches chat as text. Kept in the turn
+    // because the examples are chosen fresh each time.
+    turn += Expression_BuildGesturePrompt();
+    turn += " If you do something while you speak, put it first between asterisks, in the third person and without "
+            "your name, the way an emote reads: *grins wickedly* or *looks at the scorch marks on her sleeve*. "
+            "Never describe the other person's looks or feelings for them.";
 
     // The new line comes last: small models answer what they read last, and a message
     // buried in the middle of the prompt is how a conversation loses its thread.
-    prompt += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
-                                fmt::arg("player_message", playerMessage));
+    turn += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
+                              fmt::arg("player_message", playerMessage));
+
     // Answering comes first: small models otherwise act out the persona and the sheets in every line (2026-11-12).
-    prompt += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation. First of all, respond to "
-              "what " + playerName + " just said: answer the question, take up the suggestion, and chat back about small "
-              "things the way people do. Everything above is background: your temperament, your past and how you feel "
-              "about " + playerName + " colour your tone, but not every line has to be about you or about " + playerName +
-              "'s past; bring those up only when the talk turns to them. If " + playerName + " calls you by your name, "
-              "race, class or a title, they mean you. Keep to the topic and do not greet again if you are already talking.";
+    turn += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation. First of all, respond to "
+            "what " + playerName + " just said: answer the question, take up the suggestion, and chat back about small "
+            "things the way people do. Everything above is background: your temperament, your past and how you feel "
+            "about " + playerName + " colour your tone, but not every line has to be about you or about " + playerName +
+            "'s past; bring those up only when the talk turns to them. If " + playerName + " calls you by your name, "
+            "race, class or a title, they mean you. Keep to the topic and do not greet again if you are already talking.";
+
+    parts.turn = std::move(turn);
 
     // Debug logging for full prompt including RAG information
     if (g_DebugEnabled && g_DebugShowFullPrompt) {
-        LOG_INFO("module.ollamachat", "[Ollama Chat] Full prompt sent to bot {} for player {}: {}", botName, playerName, prompt);
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Full prompt sent to bot {} for player {}: {}",
+                 botName, playerName, parts.Full());
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Turn prompt sent to bot {} for player {}: {}",
+                 botName, playerName, parts.turn);
     }
 
-    return prompt;
+    return parts;
+}
+
+std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player)
+{
+    return GenerateBotPromptParts(bot, std::move(playerMessage), player).Full();
 }
 
 // --------------------------------------------------------------------------
@@ -2330,6 +2351,7 @@ void OllamaChatMaintenance::OnPlayerDeleteFromDB(CharacterDatabaseTransaction tr
         for (auto& [bot, people] : g_BotConversationHistory)
             people.erase(guid);
     }
+    OllamaDispatch_ForgetConversations(guid);
 }
 
 void OllamaChatMaintenance::OnPlayerLogout(Player* player)
@@ -2347,4 +2369,5 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     // in again forget everything until the next restart - and lost what was not saved yet (Conquest of Azeroth).
     OllamaRandomChatter_ForgetBot(guid);
     Topics_ForgetBot(guid);
+    OllamaDispatch_ForgetConversations(guid.GetRawValue());
 }

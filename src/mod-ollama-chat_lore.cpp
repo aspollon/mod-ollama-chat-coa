@@ -138,64 +138,81 @@ namespace
     }
 }
 
-std::string Lore_BuildSection(Player* bot, Player* other, const std::string& message)
+namespace
+{
+    void CollectStaticLore(Player* bot, Player* other, std::vector<const LoreEntry*>& used)
+    {
+        if (const LoreEntry* race = RaceEntry(bot->getRace()))
+            used.push_back(race);
+        if (const LoreEntry* cls = ById(LoreData::Classes, LoreData::ClassCount, bot->getClass()))
+            used.push_back(cls);
+        if (const LoreEntry* zone = ById(LoreData::Zones, LoreData::ZoneCount, bot->GetZoneId()))
+            used.push_back(zone);
+        if (other && other != bot && other->getRace() != bot->getRace())
+            if (const LoreEntry* theirs = RaceEntry(other->getRace()))
+                used.push_back(theirs);
+    }
+}
+
+std::string Lore_BuildStaticSection(Player* bot, Player* other)
 {
     if (!bot || !g_LoreEnable)
         return "";
 
-    std::vector<const LoreEntry*> used;
     std::string out = " What you know of the world (use it only when it fits, speak of it as someone who lived in "
                       "it, never recite it):";
 
     if (const LoreEntry* race = RaceEntry(bot->getRace()))
-    {
         out += " Your people: " + std::string(race->text);
-        used.push_back(race);
-    }
     if (const LoreEntry* cls = ById(LoreData::Classes, LoreData::ClassCount, bot->getClass()))
-    {
         out += " Your calling: " + std::string(cls->text);
-        used.push_back(cls);
-    }
     if (const LoreEntry* zone = ById(LoreData::Zones, LoreData::ZoneCount, bot->GetZoneId()))
-    {
         out += " This place, " + std::string(zone->key) + ": " + zone->text;
-        used.push_back(zone);
-    }
     out += " " + Road(bot);
 
     if (other && other != bot && other->getRace() != bot->getRace())
         if (const LoreEntry* theirs = RaceEntry(other->getRace()))
-        {
             out += " About " + std::string(other->GetName()) + "'s people, the " + Coa_RaceName(other->getRace()) +
                    ": " + FirstSentence(theirs->text);
-            used.push_back(theirs);
-        }
 
-    // What the message names.
-    if (!message.empty() && g_LoreMaxTopics > 0)
-    {
-        const std::string lowerMessage = Lower(message);
-        std::vector<std::pair<size_t, const LoreEntry*>> hits;
-        auto scan = [&](const LoreEntry* table, size_t count)
-        {
-            for (size_t i = 0; i < count; ++i)
-            {
-                const LoreEntry* e = &table[i];
-                if (std::find(used.begin(), used.end(), e) != used.end())
-                    continue;
-                if (size_t s = Score(lowerMessage, *e))
-                    hits.emplace_back(s, e);
-            }
-        };
-        scan(LoreData::Topics, LoreData::TopicCount);
-        scan(LoreData::Zones, LoreData::ZoneCount);
-        scan(LoreData::Races, LoreData::RaceCount);
-        scan(LoreData::Classes, LoreData::ClassCount);
-        std::stable_sort(hits.begin(), hits.end(),
-                         [](const auto& a, const auto& b) { return a.first > b.first; });
-        for (size_t i = 0; i < hits.size() && i < g_LoreMaxTopics; ++i)
-            out += std::string(" You also know: ") + hits[i].second->text;
-    }
     return out;
+}
+
+std::string Lore_BuildTopicSection(Player* bot, Player* other, const std::string& message)
+{
+    if (!bot || !g_LoreEnable || message.empty() || g_LoreMaxTopics == 0)
+        return "";
+
+    std::vector<const LoreEntry*> used;
+    CollectStaticLore(bot, other, used);
+
+    std::string out;
+    const std::string lowerMessage = Lower(message);
+    std::vector<std::pair<size_t, const LoreEntry*>> hits;
+    auto scan = [&](const LoreEntry* table, size_t count)
+    {
+        for (size_t i = 0; i < count; ++i)
+        {
+            const LoreEntry* e = &table[i];
+            if (std::find(used.begin(), used.end(), e) != used.end())
+                continue;
+            if (size_t s = Score(lowerMessage, *e))
+                hits.emplace_back(s, e);
+        }
+    };
+    scan(LoreData::Topics, LoreData::TopicCount);
+    scan(LoreData::Zones, LoreData::ZoneCount);
+    scan(LoreData::Races, LoreData::RaceCount);
+    scan(LoreData::Classes, LoreData::ClassCount);
+    std::stable_sort(hits.begin(), hits.end(),
+                     [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (size_t i = 0; i < hits.size() && i < g_LoreMaxTopics; ++i)
+        out += std::string(" You also know: ") + hits[i].second->text;
+
+    return out;
+}
+
+std::string Lore_BuildSection(Player* bot, Player* other, const std::string& message)
+{
+    return Lore_BuildStaticSection(bot, other) + Lore_BuildTopicSection(bot, other, message);
 }

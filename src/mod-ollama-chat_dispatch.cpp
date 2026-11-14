@@ -34,6 +34,7 @@
 #include <condition_variable>
 #include <deque>
 #include <list>
+#include <map>
 #include <unordered_map>
 #include <mutex>
 #include <thread>
@@ -111,11 +112,215 @@ namespace
     std::mutex g_lastDirectMutex;
     std::unordered_map<uint64_t, std::string> g_lastDirect;
 
+    // ---------------------------------------------------------------------
+    // Conversation contexts
+    //
+    // Ollama returns the tokenized prompt plus the reply from /api/generate.
+    // Sending that array back with only the next line continues the same
+    // sequence: the character sheet, lore, voice and history are not repeated
+    // and, when the runner still holds the matching prefix, not read again.
+    //
+    // The context is per (bot, other), not per bot. Another bot speaking to
+    // the player, a bot-to-bot conversation or ambient chatter therefore
+    // cannot mix two conversations: each carries its own token array, and a
+    // request that finds no context simply sends the full prompt.
+    // ---------------------------------------------------------------------
+    struct ConversationContext
+    {
+        std::vector<int> tokens;
+        std::string      model;
+        std::string      url;
+        std::string      systemPrompt;
+        uint32_t         numCtx       = 0;
+        uint32_t         generation   = 0;
+        uint64_t         sessionHash  = 0;
+        bool             inFlight     = false;
+        Clock::time_point lastUsed{};
+        Clock::time_point inFlightSince{};
+    };
+
+    std::mutex g_conversationMutex;
+    std::map<std::pair<uint64_t, uint64_t>, ConversationContext> g_conversations;
+
+    constexpr size_t kMaxConversationContexts = 512;
+    constexpr auto   kConversationTtl         = std::chrono::minutes(30);
+    constexpr auto   kConversationInFlightTtl = std::chrono::minutes(5);
+
+    bool TakeConversation(uint64_t botGuid, uint64_t otherGuid, uint64_t sessionHash,
+                          size_t deltaChars, std::vector<int>& out)
+    {
+        if (!g_ReuseConversationContext || botGuid == 0 || otherGuid == 0)
+            return false;
+
+        const OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+        if (cfg.provider != OllamaProvider::Ollama)
+            return false;
+
+        std::lock_guard<std::mutex> lock(g_conversationMutex);
+        auto it = g_conversations.find({ botGuid, otherGuid });
+        if (it == g_conversations.end())
+            return false;
+
+        ConversationContext& c = it->second;
+        const auto now = Clock::now();
+
+        if (c.generation != OllamaConfig_Generation() ||
+            c.model != cfg.model || c.url != cfg.url ||
+            c.systemPrompt != cfg.systemPrompt || c.numCtx != cfg.numCtx ||
+            c.sessionHash != sessionHash)
+        {
+            g_conversations.erase(it);
+            return false;
+        }
+
+        if (now - c.lastUsed > kConversationTtl)
+        {
+            g_conversations.erase(it);
+            return false;
+        }
+
+        // Two replies for the same pair at once would both start from the same
+        // tokens and the second would overwrite the first's turn. The second
+        // one uses the full prompt (which contains the last delivered turn),
+        // then the conversation continues from there.
+        if (c.inFlight)
+        {
+            if (now - c.inFlightSince > kConversationInFlightTtl)
+                c.inFlight = false;
+            else
+                return false;
+        }
+
+        // Leave room for the new turn. A context that no longer fits is
+        // dropped rather than truncated: cutting tokens out of the middle of
+        // a conversation is worse than rebuilding it from the bounded history.
+        if (cfg.numCtx > 0)
+        {
+            const size_t estimate = deltaChars / 3 + 64;
+            if (c.tokens.size() + estimate >= cfg.numCtx)
+            {
+                g_conversations.erase(it);
+                return false;
+            }
+        }
+
+        c.inFlight      = true;
+        c.inFlightSince = now;
+        c.lastUsed      = now;
+        out             = c.tokens;
+        return true;
+    }
+
+    void StoreConversation(uint64_t botGuid, uint64_t otherGuid, uint64_t sessionHash,
+                           uint32_t generation, std::vector<int> tokens)
+    {
+        if (!g_ReuseConversationContext || botGuid == 0 || otherGuid == 0)
+            return;
+
+        const OllamaEndpointSettings cfg = OllamaConfig_Snapshot();
+        if (cfg.provider != OllamaProvider::Ollama)
+            return;
+
+        std::lock_guard<std::mutex> lock(g_conversationMutex);
+        auto it = g_conversations.find({ botGuid, otherGuid });
+
+        if (tokens.empty())
+        {
+            if (it != g_conversations.end())
+                it->second.inFlight = false;
+            return;
+        }
+
+        if (cfg.numCtx > 0 && tokens.size() >= cfg.numCtx)
+        {
+            g_conversations.erase(std::make_pair(botGuid, otherGuid));
+            return;
+        }
+
+        ConversationContext& c = g_conversations[{ botGuid, otherGuid }];
+        c.tokens       = std::move(tokens);
+        c.model        = cfg.model;
+        c.url          = cfg.url;
+        c.systemPrompt = cfg.systemPrompt;
+        c.numCtx       = cfg.numCtx;
+        c.generation   = generation;
+        c.sessionHash  = sessionHash;
+        c.inFlight     = false;
+        c.lastUsed     = Clock::now();
+
+        if (g_conversations.size() > kMaxConversationContexts)
+        {
+            auto oldest = g_conversations.begin();
+            for (auto it2 = g_conversations.begin(); it2 != g_conversations.end(); ++it2)
+                if (it2->second.lastUsed < oldest->second.lastUsed)
+                    oldest = it2;
+            g_conversations.erase(oldest);
+        }
+    }
+
+    void ForgetConversation(uint64_t botGuid, uint64_t otherGuid)
+    {
+        std::lock_guard<std::mutex> lock(g_conversationMutex);
+        g_conversations.erase(std::make_pair(botGuid, otherGuid));
+    }
+
     // One generation and its cleanup; "" when nothing usable came back.
-    std::string Generate(const Task& task, const std::string& prompt, uint32_t& emoteId, std::string& action)
+    std::string Generate(const Task& task, const std::string& prompt,
+                         const std::string& turnPrompt, uint32_t& emoteId, std::string& action)
     {
         action.clear();
-        OllamaApiResult api = QueryOllama(prompt, task.request.kind);
+
+        // A stored context turns the request into the next turn of the same
+        // conversation: only turnPrompt is sent. Without one (first contact,
+        // another provider, an expired or oversized context) the full prompt
+        // goes out, exactly as before.
+        const uint32_t configGeneration = OllamaConfig_Generation();
+        std::vector<int> context;
+        bool continued = !turnPrompt.empty() &&
+            OllamaConfig_Generation() == configGeneration &&
+            TakeConversation(task.request.botGuid, task.request.targetGuid,
+                             task.request.sessionHash, turnPrompt.size(), context);
+
+        // A reload between taking the context and the call would pair tokens
+        // from the old model with the new one. Rebuild instead.
+        if (continued && OllamaConfig_Generation() != configGeneration)
+        {
+            ForgetConversation(task.request.botGuid, task.request.targetGuid);
+            continued = false;
+        }
+
+        OllamaApiResult api = continued
+            ? QueryOllama(turnPrompt, task.request.kind, 0, &context)
+            : QueryOllama(prompt, task.request.kind);
+
+        // A context the server no longer accepts must not cost the bot its
+        // reply. Rebuild from the full prompt once, then continue from the
+        // context that request returns.
+        if (continued && !api.ok && api.status != 429 && api.status != 503)
+        {
+            if (g_DebugEnabled)
+                LOG_INFO("module.ollamachat",
+                         "[Ollama Chat] Stored conversation context for {} was rejected ({}); "
+                         "falling back to the full prompt.",
+                         task.request.botName, api.error.empty() ? "unknown error" : api.error);
+
+            ForgetConversation(task.request.botGuid, task.request.targetGuid);
+            api = QueryOllama(prompt, task.request.kind);
+        }
+
+        // Keep the newest context even when the reply is unusable: the next
+        // turn should continue from the same place the model saw. A successful
+        // continued turn that came back without a context cannot be continued,
+        // so it is dropped and the next turn rebuilds from the full prompt.
+        if (!turnPrompt.empty())
+        {
+            if (api.ok && api.context.empty())
+                ForgetConversation(task.request.botGuid, task.request.targetGuid);
+            else
+                StoreConversation(task.request.botGuid, task.request.targetGuid,
+                                  task.request.sessionHash, configGeneration,
+                                  api.ok ? api.context : std::vector<int>{});
+        }
 
         if (!api.ok)
         {
@@ -165,10 +370,13 @@ namespace
         // The memories for this moment are chosen here, on the worker: weighing every one of them by recency,
         // importance and relevance (with embeddings, a call of its own) is no work for the world thread.
         const std::string prompt = Memory_ResolveRecall(task.request.prompt);
+        const std::string turnPrompt = task.request.turnPrompt.empty()
+            ? std::string()
+            : Memory_ResolveRecall(task.request.turnPrompt);
 
         uint32_t emoteId = 0;
         std::string action;
-        std::string text = Generate(task, prompt, emoteId, action);
+        std::string text = Generate(task, prompt, turnPrompt, emoteId, action);
 
         // A line handed over by another module: put its item links back, and fall back to the original where the
         // model lost something of an exact line. Such a line is always said.
@@ -217,9 +425,12 @@ namespace
                              task.request.botName, text);
                 std::string again = prompt +
                     " Answer with only the words you say, and say something new: do not repeat anything you said before.";
+                std::string againTurn = turnPrompt.empty()
+                    ? std::string()
+                    : turnPrompt + " Answer with only the words you say, and say something new: do not repeat anything you said before.";
                 uint32_t emote2 = 0;
                 std::string action2;
-                std::string second = Generate(task, again, emote2, action2);
+                std::string second = Generate(task, again, againTurn, emote2, action2);
                 if ((!second.empty() || !action2.empty()) && (second.empty() || last.empty() || Governor_Similarity(second, last) < 0.8f))
                 {
                     text = std::move(second);
@@ -766,6 +977,26 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
     ++g_totalSubmitted;
     g_queueCv.notify_one();
     return true;
+}
+
+void OllamaDispatch_ForgetConversation(uint64_t botGuid, uint64_t targetGuid)
+{
+    ForgetConversation(botGuid, targetGuid);
+}
+
+void OllamaDispatch_ForgetConversations(uint64_t guid)
+{
+    if (guid == 0)
+        return;
+
+    std::lock_guard<std::mutex> lock(g_conversationMutex);
+    for (auto it = g_conversations.begin(); it != g_conversations.end(); )
+    {
+        if (it->first.first == guid || it->first.second == guid)
+            it = g_conversations.erase(it);
+        else
+            ++it;
+    }
 }
 
 void OllamaDispatch_SubmitSentiment(uint64_t botGuid, uint64_t playerGuid,

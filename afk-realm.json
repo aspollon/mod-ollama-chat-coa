@@ -146,6 +146,12 @@
       "why": "Bots remember the last ten exchanges with each person instead of five."
     },
     {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.ReuseConversationContext",
+      "value": "1",
+      "why": "The first line of a conversation carries the full character sheet, lore and voice; later lines send only the new turn and continue from Ollama's stored token context, so the model does not read the whole sheet again for every sentence."
+    },
+    {
       "file": "playerbots.conf",
       "key": "AiPlayerbot.CoaLfgAnnounceMinutes",
       "value": "0",

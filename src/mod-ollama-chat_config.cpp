@@ -319,6 +319,7 @@ std::string g_DefaultPersonalityPrompt;
 // Chat History Templates and Toggles
 // --------------------------------------------
 bool        g_EnableChatHistory = true;
+bool        g_ReuseConversationContext = true;
 std::string g_ChatHistoryHeaderTemplate;
 std::string g_ChatHistoryLineTemplate;
 std::string g_ChatHistoryFooterTemplate;
@@ -727,6 +728,7 @@ void LoadOllamaChatConfig()
     g_ChatBotSnapshotTemplate         = sConfigMgr->GetOption<std::string>("OllamaChat.ChatBotSnapshotTemplate", "");
 
     g_EnableChatHistory               = sConfigMgr->GetOption<bool>("OllamaChat.EnableChatHistory", true);
+    g_ReuseConversationContext        = sConfigMgr->GetOption<bool>("OllamaChat.ReuseConversationContext", true);
 
     // Bot-Player Sentiment Tracking
     g_EnableSentimentTracking         = sConfigMgr->GetOption<bool>("OllamaChat.EnableSentimentTracking", true);

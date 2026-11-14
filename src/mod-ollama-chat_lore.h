@@ -41,4 +41,10 @@ namespace LoreData
 // nullptr), and up to OllamaChat.Lore.MaxTopics entries named in `message`. "" when OllamaChat.Lore.Enable is 0.
 std::string Lore_BuildSection(Player* bot, Player* other, const std::string& message);
 
+// The same knowledge in two parts. StaticSection is everything that does not depend on the message: the bot's
+// people, calling, place, road and the other person's people. TopicSection is what the current message names.
+// A conversation context keeps the static part and only the topic part is sent again on later turns.
+std::string Lore_BuildStaticSection(Player* bot, Player* other);
+std::string Lore_BuildTopicSection(Player* bot, Player* other, const std::string& message);
+
 #endif

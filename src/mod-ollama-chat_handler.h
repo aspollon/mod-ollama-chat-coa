@@ -41,6 +41,25 @@ void AppendBotConversation(uint64_t botGuid, uint64_t playerGuid,
                            const std::string& playerMessage, const std::string& botReply);
 
 // Prompt builders. World thread only -- they read live world state.
+//
+// The chat prompt is built in two parts. `staticPrompt` is everything that
+// stays the same for the whole conversation (identity, personality, lore,
+// voice, roleplay sheets, gesture rules); `turn` is what changed or is new
+// (situation, sentiment, relationship, message-specific lore, memories, the
+// new line). A first contact sends both. A continued conversation sends only
+// `turn` and lets Ollama continue from its stored token context.
+struct BotPromptParts
+{
+    std::string staticPrompt;
+    std::string history;        // past turns, may be empty
+    std::string turn;
+    uint64_t    staticHash = 0;
+
+    std::string Session() const { return staticPrompt + history; }
+    std::string Full() const { return Session() + turn; }
+};
+
+BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Player* player);
 std::string GenerateBotPrompt(Player* bot, std::string playerMessage, Player* player);
 
 // "Right now: It is evening. You are on your mount ..." -- where the bot is and what it is doing.

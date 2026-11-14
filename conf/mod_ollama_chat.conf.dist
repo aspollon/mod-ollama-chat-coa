@@ -562,6 +562,18 @@ OllamaChat.DefaultPersonalityPrompt = "You speak naturally for someone of your p
 #     Default:     1 (true)
 OllamaChat.EnableChatHistory = 1
 
+# OllamaChat.ReuseConversationContext
+#     Description: Keeps the tokenized conversation that Ollama returns from a
+#                  reply and sends only the new turn on the following lines
+#                  with the same bot and person, instead of the whole
+#                  character sheet, lore and history again. The first line,
+#                  every line after the context expired or the character
+#                  changed, and every request the server rejects still carry
+#                  the full prompt. Only Ollama's native /api/generate
+#                  supports this; other providers always get the full prompt.
+#     Default:     1 (true)
+OllamaChat.ReuseConversationContext = 1
+
 # OllamaChat.MaxConversationHistory
 #     Description: The maximum number of recent message pairs (player + bot reply) to track per bot/player combination.
 #                  This history is stored in memory and included in the LLM prompt when the same player talks to the bot again.
