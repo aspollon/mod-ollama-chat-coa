@@ -558,7 +558,7 @@ namespace
         {
             // English: "I grin at you" -> "grins at you"
             action = TrimCopy(action.substr(1));
-            size_t end = action.find(' ');
+            size_t end = action.find_first_of(" \t,;.!?");
             std::string verb = action.substr(0, end);
             std::string rest = end == std::string::npos ? "" : action.substr(end);
             if (Lower(verb) == "am") verb = "is";
@@ -591,7 +591,7 @@ namespace
             // The model often narrates at the reader: "You stand there, your clothes ...".
             // As an emote it is about the bot: "stands there, their clothes ...".
             action = TrimCopy(action.substr(3));
-            size_t end = action.find(' ');
+            size_t end = action.find_first_of(" \t,;.!?");
             std::string verb = action.substr(0, end);
             std::string rest = end == std::string::npos ? "" : action.substr(end);
             const std::string lv = Lower(verb);
@@ -630,7 +630,7 @@ namespace
         {
             // German: "Ich grinse dich an" -> "grinst dich an"
             action = TrimCopy(action.substr(3));
-            size_t end = action.find(' ');
+            size_t end = action.find_first_of(" \t,;.!?");
             std::string verb = action.substr(0, end);
             std::string rest = end == std::string::npos ? "" : action.substr(end);
             if (Lower(verb) == "bin") verb = "ist";
@@ -642,7 +642,7 @@ namespace
         // Bare German stage stems ("rutsch", "kicher") are imperative; the
         // emote line needs the third person ("rutscht", "kichert").
         {
-            const size_t end = action.find(' ');
+            const size_t end = action.find_first_of(" \t,;.!?");
             const std::string first = Lower(action.substr(0, end));
             static const std::unordered_map<std::string, std::string> third = {
                 { "rutsch", "rutscht" }, { "kicher", "kichert" }, { "seufz", "seufzt" },
