@@ -489,6 +489,9 @@ namespace
                         parsed.value("eval_count", 0), ms("eval_duration"));
                 }
 
+                if (parsed.value("done_reason", std::string()) == "length")
+                    result.cutOff = true;
+
                 if (parsed.contains("prompt_eval_count") && parsed["prompt_eval_count"].is_number_integer())
                     result.promptEvalCount = parsed["prompt_eval_count"].get<int>();
                 if (parsed.contains("prompt_eval_cached_count") && parsed["prompt_eval_cached_count"].is_number_integer())

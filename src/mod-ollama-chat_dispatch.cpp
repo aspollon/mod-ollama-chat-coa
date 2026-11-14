@@ -318,7 +318,34 @@ namespace
 
         // "*grins wickedly* Well met." -- the action becomes an emote line, the rest is spoken.
         std::string raw = api.text;
+
+        // Stopped by NumPredict: the last sentence is unfinished. End on the last whole one rather than
+        // sending "and then there was Sylvanas..." with nothing after it.
+        if (api.cutOff)
+        {
+            size_t end = std::string::npos;
+            for (size_t i = raw.size(); i > 0; --i)
+            {
+                const char ch = raw[i - 1];
+                if ((ch == '.' || ch == '!' || ch == '?') && (i == raw.size() || raw[i] == ' ' || raw[i] == '"'))
+                {
+                    end = (i < raw.size() && raw[i] == '"') ? i + 1 : i;
+                    break;
+                }
+            }
+            if (end != std::string::npos && end > raw.size() / 3)
+            {
+                raw.resize(end);
+                // Close a quote the cut left open.
+                if (std::count(raw.begin(), raw.end(), '"') % 2 == 1)
+                    raw += '"';
+            }
+        }
+
         action = Coa_TakeActionEmote(raw, task.request.botName);
+        // The old prompt example; it lives on in contexts and histories, so it is never sent again.
+        if (action.find("grins wickedly") != std::string::npos || action.find("Grins wickedly") != std::string::npos)
+            action.clear();
         if (!action.empty())
         {
             action = Roleplay_FilterMetaTerms(action);
@@ -658,12 +685,24 @@ namespace
         };
         while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
             s.pop_back();
+        // A reply that ends on "..." reads as a story that stops; end it on a full stop.
+        {
+            const bool quoted = !s.empty() && s.back() == '"';
+            const size_t body = quoted ? s.size() - 1 : s.size();
+            if (body >= 3 && s.compare(body - 3, 3, "...") == 0)
+            {
+                size_t from = body - 3;
+                while (from > 0 && s[from - 1] == '.')
+                    --from;
+                s.replace(from, body - from, ".");
+            }
+        }
         if (!s.empty() && !isEnd(s.back()) && s.back() != '\'' && s.back() != ')')
         {
             if (size_t at = sentenceEnd(s, s.size(), 0))
                 s.resize(at);
             else
-                s += s.size() > 60 ? "..." : ".";   // a long line without an end was most likely cut off
+                s += ".";   // no "..." after a cut: it reads as a story that never goes on
         }
         std::vector<std::string> lines;
         while (s.size() > kMax)

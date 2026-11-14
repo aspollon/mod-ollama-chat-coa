@@ -101,7 +101,7 @@ const char* OllamaProvider_Name(OllamaProvider provider)
         default:                        return "ollama";
     }
 }
-uint32_t    g_OllamaNumPredict = 40;
+uint32_t    g_OllamaNumPredict = 250;
 float       g_OllamaTemperature = 0.8f;
 float       g_OllamaTopP = 0.95f;
 float       g_OllamaRepeatPenalty = 1.1f;
@@ -155,7 +155,7 @@ uint32_t g_MaxQueueDepth          = 64;
 // --------------------------------------------
 // Response post-processing
 // --------------------------------------------
-uint32_t g_MaxReplyLength                = 240;
+uint32_t g_MaxReplyLength                = 600;
 bool     g_ResponseStripMarkdown         = true;
 bool     g_ResponseStripDecorativeUnicode = true;
 
@@ -588,7 +588,7 @@ void LoadOllamaChatConfig()
         }
     }
 
-    g_OllamaNumPredict                = sConfigMgr->GetOption<uint32_t>("OllamaChat.NumPredict", 40);
+    g_OllamaNumPredict                = sConfigMgr->GetOption<uint32_t>("OllamaChat.NumPredict", 250);
     g_OllamaTemperature               = sConfigMgr->GetOption<float>("OllamaChat.Temperature", 0.8f);
     g_OllamaTopP                      = sConfigMgr->GetOption<float>("OllamaChat.TopP", 0.95f);
     g_OllamaRepeatPenalty             = sConfigMgr->GetOption<float>("OllamaChat.RepeatPenalty", 1.1f);
@@ -721,7 +721,7 @@ void LoadOllamaChatConfig()
     g_MaxQueueDepth                   = sConfigMgr->GetOption<uint32_t>("OllamaChat.MaxQueueDepth", 64);
 
     // --- Response pipeline ----------------------------------------------
-    g_MaxReplyLength                  = sConfigMgr->GetOption<uint32_t>("OllamaChat.MaxReplyLength", 240);
+    g_MaxReplyLength                  = sConfigMgr->GetOption<uint32_t>("OllamaChat.MaxReplyLength", 600);
     g_ResponseStripMarkdown           = sConfigMgr->GetOption<bool>("OllamaChat.StripMarkdown", true);
     g_ResponseStripDecorativeUnicode  = sConfigMgr->GetOption<bool>("OllamaChat.StripDecorativeUnicode", true);
 

@@ -17,6 +17,7 @@ struct OllamaApiResult
     std::string text;             // model output, reasoning already removed
     std::string thinking;         // native reasoning, kept only for debug logs
     bool        ok        = false;
+    bool        cutOff    = false;   // stopped by NumPredict (done_reason "length"), mid-sentence
     int         status    = 0;
     std::string error;
     uint64_t    latencyMs = 0;
