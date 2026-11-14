@@ -26,6 +26,7 @@
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -905,12 +906,41 @@ bool OllamaDispatch_Submit(OllamaChatRequest request)
 
         if (g_MaxQueueDepth > 0 && g_queue.size() >= g_MaxQueueDepth)
         {
-            ++g_droppedQueueFull;
-            if (g_DebugEnabled)
-                LOG_INFO("module.ollamachat",
-                         "[Ollama Chat] Queue full ({}); dropping request for {}.",
-                         g_queue.size(), task.request.botName);
-            return false;
+            // A direct question always gets an answer. When the queue is full of
+            // ambient chatter, the oldest ambient request makes room for it.
+            if (task.request.directAddress)
+            {
+                auto ambient = std::find_if(g_queue.begin(), g_queue.end(), [](const Task& queued) {
+                    return !queued.request.directAddress && !queued.request.voice;
+                });
+                if (ambient != g_queue.end())
+                {
+                    ++g_droppedQueueFull;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat",
+                                 "[Ollama Chat] Queue full ({}); dropped ambient request for {} to answer {}.",
+                                 g_queue.size(), ambient->request.botName, task.request.botName);
+                    g_queue.erase(ambient);
+                }
+                else
+                {
+                    ++g_droppedQueueFull;
+                    if (g_DebugEnabled)
+                        LOG_INFO("module.ollamachat",
+                                 "[Ollama Chat] Queue full ({}); dropping direct request for {}.",
+                                 g_queue.size(), task.request.botName);
+                    return false;
+                }
+            }
+            else
+            {
+                ++g_droppedQueueFull;
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat",
+                             "[Ollama Chat] Queue full ({}); dropping request for {}.",
+                             g_queue.size(), task.request.botName);
+                return false;
+            }
         }
 
         g_queue.push_back(std::move(task));
