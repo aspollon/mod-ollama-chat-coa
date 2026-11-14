@@ -152,6 +152,30 @@
       "why": "The first line of a conversation carries the full character sheet, lore and voice; later lines send only the new turn and continue from Ollama's stored token context, so the model does not read the whole sheet again for every sentence."
     },
     {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.NumThreads",
+      "value": "0",
+      "why": "Let Ollama use all available cores. 1 forces a single CPU thread and makes a large model many times slower."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.MaxConcurrentQueries",
+      "value": "1",
+      "why": "One model request at a time keeps Ollama's single prompt cache on the current conversation. Parallel requests evict it and make every line slow again."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.WorkerThreads",
+      "value": "1",
+      "why": "Matches the single allowed model request; extra workers would only wait behind it."
+    },
+    {
+      "file": "mod_ollama_chat.conf",
+      "key": "OllamaChat.HttpTimeoutSeconds",
+      "value": "300",
+      "why": "A large model on CPU can need more than the old 120 seconds for a long first prompt. A timeout also resets the model and its prompt cache."
+    },
+    {
       "file": "playerbots.conf",
       "key": "AiPlayerbot.CoaLfgAnnounceMinutes",
       "value": "0",

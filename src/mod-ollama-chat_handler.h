@@ -52,7 +52,8 @@ struct BotPromptParts
 {
     std::string staticPrompt;
     std::string history;        // past turns, may be empty
-    std::string turn;
+    std::string turn;           // full turn, for a first contact
+    std::string turnCompact;    // short turn, for a continued conversation
     uint64_t    staticHash = 0;
 
     std::string Session() const { return staticPrompt + history; }

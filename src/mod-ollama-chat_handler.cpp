@@ -669,20 +669,38 @@ std::string GetBotHistoryPrompt(uint64_t botGuid, uint64_t playerGuid, std::stri
     std::string playerName = player ? player->GetName() : "The player";
 
     result += SafeFormat(g_ChatHistoryHeaderTemplate, fmt::arg("player_name", playerName));
+    if (!result.empty() && result.back() != '\n')
+        result += '\n';
+
+    // Config templates write a line break as "\n"; make it a real one so the
+    // model reads a dialogue and not a row of backslashes.
+    auto unescape = [](std::string& text)
+    {
+        for (size_t p; (p = text.find("\\n")) != std::string::npos; )
+            text.replace(p, 2, "\n");
+    };
 
     for (const auto& entry : playerIt->second) {
-        result += SafeFormat(g_ChatHistoryLineTemplate,
+        std::string line = SafeFormat(g_ChatHistoryLineTemplate,
             fmt::arg("player_name", playerName),
             fmt::arg("player_message", entry.playerMessage),
             fmt::arg("bot_reply", entry.botReply)
         );
+        unescape(line);
+        result += line;
+        if (!result.empty() && result.back() != '\n')
+            result += '\n';
     }
 
     if (withFooter)
-        result += SafeFormat(g_ChatHistoryFooterTemplate,
+    {
+        std::string footer = SafeFormat(g_ChatHistoryFooterTemplate,
             fmt::arg("player_name", playerName),
             fmt::arg("player_message", playerMessage)
         );
+        unescape(footer);
+        result += footer;
+    }
 
     return result;
 }
@@ -1849,7 +1867,7 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
         request.directAddress = directAddress;
         request.scopeKey    = scopeKey;
         request.prompt      = parts.Full();
-        request.turnPrompt  = std::move(parts.turn);
+        request.turnPrompt  = std::move(parts.turnCompact);
         request.sessionHash = parts.staticHash;
         request.botName     = bot->GetName();
         request.originMessage = msg;
@@ -2101,6 +2119,55 @@ std::string OllamaDescribeSituation(Player* bot, Player* player)
     return out;
 }
 
+namespace
+{
+    // The short version of OllamaDescribeSituation for a continued
+    // conversation: time, place, what the bot is doing and how far away the
+    // person is, without quests, persona or the rest of the day.
+    std::string CompactSituation(Player* bot, Player* player, const std::string& area, const std::string& zone)
+    {
+        time_t now = time(nullptr);
+        tm local{};
+#ifdef _WIN32
+        localtime_s(&local, &now);
+#else
+        localtime_r(&now, &local);
+#endif
+
+        const int h = local.tm_hour;
+        std::string out = "It is ";
+        out += h < 5 ? "deep in the night" : h < 11 ? "morning" : h < 14 ? "midday"
+             : h < 18 ? "afternoon" : h < 22 ? "evening" : "night";
+        out += ". You are in " + (area.empty() || area == "UnknownArea" ? zone : area);
+        if (!zone.empty() && zone != "UnknownZone" && zone != area)
+            out += ", " + zone;
+        out += ".";
+
+        if (!bot->IsAlive())
+            out += " You are a spirit.";
+        else if (bot->IsInCombat())
+        {
+            Unit* foe = bot->GetVictim();
+            out += foe ? " You are fighting " + std::string(foe->GetName()) + "." : " You are fighting.";
+        }
+        else if (bot->IsMounted())
+            out += " You are mounted.";
+        else if (bot->IsSitState())
+            out += " You are sitting.";
+
+        if (player && player->IsInWorld() && bot->IsInWorld() && player->GetMapId() == bot->GetMapId())
+        {
+            const float d = player->GetDistance(bot);
+            if (d < 6.0f)
+                out += " " + player->GetName() + " is standing in front of you.";
+            else if (d < 30.0f)
+                out += " " + player->GetName() + " is a few steps away.";
+        }
+
+        return out;
+    }
+}
+
 BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Player* player)
 {
     BotPromptParts parts;
@@ -2281,12 +2348,26 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
 
     parts.turn = std::move(turn);
 
+    // A continued conversation already has the sheet, lore, voice, roleplay
+    // sheets and history in Ollama's context. Only the current situation, one
+    // short piece of message-named lore and the new line are still needed;
+    // everything else would make the turn long again and cost seconds on a
+    // CPU-only server.
+    std::string compact;
+    compact += "\nRight now: " + CompactSituation(bot, player, botAreaName, botZoneName);
+    compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
+    compact += " You may add a short *action* or [emote:name] if it fits.";
+    compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
+                                 fmt::arg("player_message", playerMessage));
+    compact += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation; keep to the topic.";
+    parts.turnCompact = std::move(compact);
+
     // Debug logging for full prompt including RAG information
     if (g_DebugEnabled && g_DebugShowFullPrompt) {
         LOG_INFO("module.ollamachat", "[Ollama Chat] Full prompt sent to bot {} for player {}: {}",
                  botName, playerName, parts.Full());
-        LOG_INFO("module.ollamachat", "[Ollama Chat] Turn prompt sent to bot {} for player {}: {}",
-                 botName, playerName, parts.turn);
+        LOG_INFO("module.ollamachat", "[Ollama Chat] Continued turn prompt sent to bot {} for player {}: {}",
+                 botName, playerName, parts.turnCompact);
     }
 
     return parts;

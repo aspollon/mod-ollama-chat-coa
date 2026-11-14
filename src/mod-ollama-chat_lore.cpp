@@ -212,6 +212,40 @@ std::string Lore_BuildTopicSection(Player* bot, Player* other, const std::string
     return out;
 }
 
+std::string Lore_BuildTopicSectionShort(Player* bot, Player* other, const std::string& message, size_t maxTopics)
+{
+    if (!bot || !g_LoreEnable || message.empty() || maxTopics == 0)
+        return "";
+
+    std::vector<const LoreEntry*> used;
+    CollectStaticLore(bot, other, used);
+
+    std::string out;
+    const std::string lowerMessage = Lower(message);
+    std::vector<std::pair<size_t, const LoreEntry*>> hits;
+    auto scan = [&](const LoreEntry* table, size_t count)
+    {
+        for (size_t i = 0; i < count; ++i)
+        {
+            const LoreEntry* e = &table[i];
+            if (std::find(used.begin(), used.end(), e) != used.end())
+                continue;
+            if (size_t s = Score(lowerMessage, *e))
+                hits.emplace_back(s, e);
+        }
+    };
+    scan(LoreData::Topics, LoreData::TopicCount);
+    scan(LoreData::Zones, LoreData::ZoneCount);
+    scan(LoreData::Races, LoreData::RaceCount);
+    scan(LoreData::Classes, LoreData::ClassCount);
+    std::stable_sort(hits.begin(), hits.end(),
+                     [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (size_t i = 0; i < hits.size() && i < maxTopics; ++i)
+        out += std::string(" You also know: ") + FirstSentence(hits[i].second->text);
+
+    return out;
+}
+
 std::string Lore_BuildSection(Player* bot, Player* other, const std::string& message)
 {
     return Lore_BuildStaticSection(bot, other) + Lore_BuildTopicSection(bot, other, message);

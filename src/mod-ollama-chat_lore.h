@@ -47,4 +47,8 @@ std::string Lore_BuildSection(Player* bot, Player* other, const std::string& mes
 std::string Lore_BuildStaticSection(Player* bot, Player* other);
 std::string Lore_BuildTopicSection(Player* bot, Player* other, const std::string& message);
 
+// The same message-named knowledge, one short sentence per entry and at most `maxTopics` of them. For a continued
+// conversation, where the full lore would only make the new turn long again.
+std::string Lore_BuildTopicSectionShort(Player* bot, Player* other, const std::string& message, size_t maxTopics);
+
 #endif
