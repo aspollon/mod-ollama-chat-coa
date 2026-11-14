@@ -18,14 +18,6 @@ namespace
             { "mod_ollama_chat_personality",           "guid" },
             { "mod_ollama_chat_history",               "bot_guid" },
             { "mod_ollama_chat_history",               "player_guid" },
-            { "mod_ollama_chat_memories",              "bot_guid" },
-            { "mod_ollama_chat_memories",              "about_guid" },
-            { "mod_ollama_chat_relationships",         "bot_guid" },
-            { "mod_ollama_chat_relationships",         "other_guid" },
-            { "mod_ollama_chat_bot_player_sentiments", "bot_guid" },
-            { "mod_ollama_chat_bot_player_sentiments", "player_guid" },
-            { "mod_ollama_chat_bonds",                 "bot_guid" },
-            { "mod_ollama_chat_bonds",                 "other_guid" },
             { "mod_ollama_chat_rp",                    "guid" },
         };
         return columns;

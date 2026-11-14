@@ -1,6 +1,5 @@
 #include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat_api.h"
-#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -132,34 +131,6 @@ namespace
         Send(to, "s\t" + name + "\t" + (sheet.bot ? "bot" : "done"));
     }
 
-    // A bot's standing with the player, for the add-on's bond bar: b <name> <standing> <affinity> <romance> <talks>
-    // <shared> <last topic>.
-    void SendStanding(Player* to, std::string const& name, uint64_t botGuid)
-    {
-        BondStanding b = Bond_Standing(botGuid, to->GetGUID().GetRawValue());
-        Send(to, "b\t" + name + "\t" + b.standing + "\t" + std::to_string(b.affinity) + "\t" + std::to_string(b.romance) +
-                 "\t" + std::to_string(b.talks) + "\t" + std::to_string(b.shared) + "\t" + Cut(Encode(b.lastTopic), 150));
-    }
-
-    // One character of the player's RP friends list: fr <name> <online> <zone> <standing> <affinity> <romance>.
-    void SendFriend(Player* to, std::string const& name)
-    {
-        ObjectGuid guid = sCharacterCache->GetCharacterGuidByName(name);
-        if (!guid)
-        {
-            Send(to, "fr\t" + name + "\t-\t\tstranger\t0\t0");
-            return;
-        }
-        std::string zone;
-        Player* who = ObjectAccessor::FindConnectedPlayer(guid);
-        if (who && who->IsInWorld())
-            if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(who->GetZoneId()))
-                zone = area->area_name[0];
-        BondStanding b = Bond_Standing(guid.GetRawValue(), to->GetGUID().GetRawValue());
-        Send(to, "fr\t" + name + "\t" + (who ? "1" : "0") + "\t" + Cut(Encode(zone), 60) + "\t" + b.standing + "\t" +
-                 std::to_string(b.affinity) + "\t" + std::to_string(b.romance));
-    }
-
     void Save(uint64_t guid)
     {
         auto it = g_sheets.find(guid);
@@ -249,7 +220,7 @@ namespace
         g_pending.insert(guid);
         bool const queued = OllamaDispatch_SubmitJob([guid, prompt]()
         {
-            OllamaApiResult api = QueryOllama(prompt, OllamaRequestKind::Sentiment, 700);
+            OllamaApiResult api = QueryOllama(prompt, OllamaRequestKind::Background, 700);
             Done d{ guid, false, {} };
             if (api.ok)
             {
@@ -326,8 +297,6 @@ namespace
                 Send(player, "t\t" + name + "\t" + title);
                 return;
             }
-            if (OllamaIsBotPlayer(who))
-                SendStanding(player, name, who->GetGUID().GetRawValue());
             if (it != g_sheets.end())
                 SendSheet(player, name, it->second);
             else if (OllamaIsBotPlayer(who) && g_enable)
@@ -356,8 +325,6 @@ namespace
                 g_dirty.insert(me);
             }
         }
-        else if (cmd == "friend" && p.size() >= 2)
-            SendFriend(player, p[1]);
         else if (cmd == "clear")
         {
             g_sheets.erase(me);

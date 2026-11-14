@@ -7,10 +7,8 @@
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_handler.h"
-#include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
-#include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat-utilities.h"
 
@@ -309,13 +307,6 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
     AreaTableEntry const* area = ai->GetCurrentArea();
     AreaTableEntry const* zone = ai->GetCurrentZone();
 
-    std::string sentimentInfo;
-    if (g_EnableSentimentTracking && !actorName.empty())
-    {
-        if (Player* actor = ObjectAccessor::FindPlayerByName(actorName))
-            sentimentInfo = GetSentimentPromptAddition(bot, actor);
-    }
-
     std::string prompt = SafeFormat(
         promptTemplate,
         fmt::arg("bot_name", bot->GetName()),
@@ -333,9 +324,8 @@ std::string OllamaBotEventChatter::BuildPrompt(Player* bot, std::string promptTe
         fmt::arg("event_type", eventType),
         fmt::arg("event_detail", eventDetail),
         fmt::arg("actor_name", actorName),
-        fmt::arg("sentiment_info", sentimentInfo));
+        fmt::arg("sentiment_info", std::string()));
 
-    prompt += Memory_RecallMarker(bot, nullptr, eventType + " " + eventDetail);
     prompt += Roleplay_BuildVoicePrompt(bot);
     prompt += Expression_BuildGesturePrompt();
     return prompt;
@@ -357,7 +347,6 @@ void ChatOnKill::OnPlayerCreatureKill(Player* killer, Creature* victim)
     if (killer && victim)
     {
         eventChatter.DispatchGameEvent(killer, g_EventTypeDefeated, victim->GetName());
-        Experience_OnCreatureKill(killer, victim);
     }
 }
 
@@ -412,7 +401,6 @@ void ChatOnDeath::OnPlayerJustDied(Player* player)
     if (player)
     {
         eventChatter.DispatchGameEvent(player, g_EventTypeDied, "");
-        Experience_OnDeath(player);
     }
 }
 
@@ -427,7 +415,6 @@ void ChatOnQuest::OnPlayerCompleteQuest(Player* player, Quest const* quest)
         return;
 
     eventChatter.DispatchGameEvent(player, g_EventTypeCompletedQuest, quest->GetTitle());
-    Experience_OnQuestComplete(player, quest);
 
     if (player->GetGuild() && g_EnableGuildEventChatter &&
         !g_GuildEventTypeDungeonComplete.empty() &&
@@ -480,7 +467,6 @@ void ChatOnDuel::OnPlayerDuelEnd(Player* winner, Player* loser, DuelCompleteType
     if (winner && loser)
     {
         eventChatter.DispatchGameEvent(winner, g_EventTypeWonDuel, loser->GetName());
-        Experience_OnDuelEnd(winner, loser);
     }
 }
 

@@ -14,7 +14,7 @@
 //                              request comes back rejected.
 //   SHOULD it think here?   -- answered per request kind. Reasoning costs
 //                              seconds and tokens; a fifteen-word tavern line
-//                              does not need it, a sentiment judgement does.
+//                              does not need it, a background text does.
 //
 // Getting the first one wrong used to silence every bot on the server with
 // nothing in the log but a generic empty-response error.
@@ -32,7 +32,7 @@ enum class OllamaRequestKind : uint8_t
     ChatReply = 0,
     RandomChatter,
     EventChatter,
-    Sentiment,
+    Background,
     RoleplayReply,
 };
 

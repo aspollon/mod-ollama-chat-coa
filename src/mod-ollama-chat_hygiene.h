@@ -6,7 +6,7 @@
 
 // Conquest of Azeroth: what the module stored about characters that no longer exist goes with them.
 //
-// At start, before anything is loaded: conversation history, memories, relationships, moods, bonds and temperaments
+// At start, before anything is loaded: conversation history, roleplay sheets and temperaments
 // of deleted characters are removed - on both sides, the bot's own and what bots keep about a deleted person - and so
 // is everything stored under a guid that now belongs to a different character (a bot reset deletes bots straight from
 // the database, and the server can hand their guids to new characters). A character deleted while the server runs is

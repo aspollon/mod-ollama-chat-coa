@@ -93,7 +93,6 @@ struct OllamaChatRequest
     // Post-delivery behaviour.
     bool triggerBotReplies = true;   // let other bots hear this line
     bool recordHistory     = false;  // append to conversation history
-    bool updateSentiment   = false;  // run sentiment analysis on originMessage
 
     // A line another module handed over to be said in the bot's own words (CoaChatBridge::Speak). It is always
     // said: if the model fails, or drops an item, a number or a marker of an exact line, the original goes out.
@@ -119,24 +118,6 @@ void OllamaDispatch_Update(uint32_t diff);
 void OllamaDispatch_Start();
 void OllamaDispatch_Stop();
 
-// Fire-and-forget sentiment analysis. Runs entirely on a worker: the sentiment
-// store is mutex-guarded in-memory state plus async DB writes, so it never
-// needs the world thread -- and it must never run on it, because the analysis
-// is a blocking HTTP call.
-void OllamaDispatch_SubmitSentiment(uint64_t botGuid, uint64_t playerGuid,
-                                    const std::string& message);
-
-// Distil a bot's accumulated history into lasting memories, then clear it.
-// Fire-and-forget; runs entirely on a worker.
-void OllamaDispatch_SubmitCondensation(uint64_t botGuid, const std::string& prompt);
-
-// Write or revise how a bot feels about someone.
-void OllamaDispatch_SubmitRelationship(uint64_t botGuid, uint64_t otherGuid,
-                                       const std::string& otherName,
-                                       const std::string& prompt);
-
-// A player emoted at a bot and the bot decided to answer in words.
-// World thread only.
 // Background work for a worker thread (a summary, say); it may call QueryOllama. Dropped when the queue is busy.
 bool OllamaDispatch_SubmitJob(std::function<void()> job);
 

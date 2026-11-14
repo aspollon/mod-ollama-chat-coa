@@ -424,8 +424,8 @@ bool OllamaCapability_ShouldThink(OllamaRequestKind kind)
     // Auto: spend reasoning only where it changes the answer.
     switch (kind)
     {
-        case OllamaRequestKind::Sentiment:
-            return true;    // a judgement, and never shown to players
+        case OllamaRequestKind::Background:
+            return true;    // background text, never shown to players
         case OllamaRequestKind::RoleplayReply:
             return g_RoleplayStrictness >= 2;
         case OllamaRequestKind::ChatReply:

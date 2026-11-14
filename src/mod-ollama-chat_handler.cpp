@@ -38,7 +38,6 @@
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat-utilities.h"
-#include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat_rag.h"
 #include "mod-ollama-chat_dispatch.h"
 #include "mod-ollama-chat_governor.h"
@@ -47,7 +46,6 @@
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_world.h"
-#include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_random.h"
 #include <iomanip>
@@ -1876,7 +1874,6 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
                            : OllamaRequestKind::ChatReply;
         request.triggerBotReplies = (sourceLocal != SRC_WHISPER_LOCAL);
         request.recordHistory     = !senderIsBot;
-        request.updateSentiment   = !senderIsBot && g_EnableSentimentTracking;
 
         if (!OllamaDispatch_Submit(std::move(request)) && g_DebugEnabled)
         {
@@ -2225,7 +2222,6 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     float playerDistance            = player->IsInWorld() && bot->IsInWorld() ? player->GetDistance(bot) : -1.0f;
 
     std::string chatHistory         = GetBotHistoryPrompt(botGuid, playerGuid, playerMessage, false);
-    std::string sentimentInfo       = GetSentimentPromptAddition(bot, player);
 
     // Retrieve RAG information if enabled
     std::string ragInfo;
@@ -2302,10 +2298,7 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     // The turn: what is true right now, what this message brought up, and the
     // new line. None of this belongs in the static prefix.
     std::string turn;
-    turn += "\nRight now: " + extraInfo + " " + sentimentInfo;
-
-    // Who the person is to this bot: stranger, friend, beloved, enemy; and what they last talked about.
-    turn += Bond_BuildPromptSection(bot, player);
+    turn += "\nRight now: " + extraInfo;
 
     // Where the bot is and what it is doing, so it can talk from inside its own day.
     turn += " " + OllamaDescribeSituation(bot, player);
@@ -2320,10 +2313,6 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
 
     if (g_EnableChatBotSnapshotTemplate)
         turn += GenerateBotGameStateSnapshot(bot);
-
-    // What this bot remembers, and how it feels about people. Bounded by
-    // their own token budgets, so this cannot grow the prompt without limit.
-    turn += Memory_RecallMarker(bot, player, playerMessage);
 
     // Let the model gesture. The tag is parsed back out and stripped before
     // the line is spoken, so it never reaches chat as text. Kept in the turn
@@ -2424,8 +2413,6 @@ std::string BuildEmoteReactionPrompt(Player* bot, Player* player, uint32_t textE
 void OllamaChatMaintenance::OnPlayerDeleteFromDB(CharacterDatabaseTransaction trans, uint32 guid)
 {
     Hygiene_OnCharacterDeleted(trans, guid);
-    Memory_ForgetBot(ObjectGuid::Create<HighGuid::Player>(guid));
-    Bond_Forget(guid);
     {
         std::lock_guard<std::mutex> lock(g_ConversationHistoryMutex);
         g_BotConversationHistory.erase(guid);
@@ -2446,8 +2433,6 @@ void OllamaChatMaintenance::OnPlayerLogout(Player* player)
     const ObjectGuid guid = player->GetGUID();
 
     Governor_OnPlayerLogout(guid);
-    // Memories stay in memory: they are loaded once at start, so dropping them here made a bot that logged out and
-    // in again forget everything until the next restart - and lost what was not saved yet (Conquest of Azeroth).
     OllamaRandomChatter_ForgetBot(guid);
     Topics_ForgetBot(guid);
     OllamaDispatch_ForgetConversations(guid.GetRawValue());

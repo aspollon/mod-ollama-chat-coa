@@ -20,13 +20,9 @@ What is different from the original:
 - Answers that repeat the prompt or the bot's last line are asked for again.
 - Bots know the world, built into the module (no files, no RAG): the story of every CoA and CoA Custom people, the order or tradition of every CoA class, every zone of the old world, Outland and Northrend with its capitals, and the persons, orders and events of the time of the Lich King. A bot knows its own people, calling and place, something of the people of whoever it talks to, and what a message names ("Arthas", "Gilneas", "the Scourge"). With mod-world-journey it knows how far along the road to Outland and Northrend it is, in words, never in levels (`OllamaChat.Lore.Enable`, `OllamaChat.Lore.MaxTopics`). The tables are in `src/mod-ollama-chat_lore_data.cpp`.
 - `OllamaChat.NumCtx = 8192`: room for all of that; with a model's short default the instructions at the start of the prompt were cut off.
-- Bonds: every bot has a bond with each person it knows - stranger, someone it likes, friend, closest friend, someone it is drawn to, beloved, or someone it distrusts, dislikes, its enemy. Friendly, romantic or hostile words (rated with each message) and things gone through together move it. The bot knows when it last spoke with someone and what about - a summary is written when a conversation goes quiet - and remarks on a long absence (`OllamaChat.Bond.Enable`, `OllamaChat.Bond.Romance`).
 - A bot in a conversation stays: it stops its errands, turns to the person and follows a few steps when they walk on, until the conversation goes quiet or the person says goodbye and the bot has answered; never in combat, dungeons, raids, battlegrounds or duels (`OllamaChat.Conversation.HoldSeconds`). Immersion's residents keep their place instead.
-- Experiences: hard fights (elites, rares, bosses), tasks finished, falls in battle and duels become memories - together with a person ("You and Chris fought and defeated Hogger in Elwynn Forest.") or alone - and come up when the bot talks with that person.
-- `src/CoaChatBridge.h` connects the module with mod-playerbots-auctions and mod-playerbots-immersion without either needing the other: the residents of Immersion tell the bot who it is (a beggar, a legendary veteran, an angler, someone at the bank) and hand over their ambient lines; Auctions hands over the whispers of a deal (items, amounts and prices stay exactly as they are, or the original line is sent), reports every deal as a memory and tells how the bot trades (`OllamaChat.Voice.Enable`).
-- Memory like "Generative Agents" (Park et al., 2023): each bot keeps a stream of memories of different kinds - experiences and notes, reflections, goals and rumours. For every line it chooses the memories that matter by recency (decaying from when a memory last came up), importance and relevance to the moment, scaled and added as in the paper; relevance by shared words, or by meaning with an Ollama embedding model (`OllamaChat.Recall.EmbedModel`, e.g. nomic-embed-text). Bots that dealt with real people reflect when enough has happened: the model asks what is worth thinking about, gathers the memories that bear on it and draws conclusions that become memories themselves, so a bot builds its own view of the world and of the people it knows. They have goals of their own, revised as they reflect, and talk about them as wishes. When bots talk, they pass on what they went through with people, so your reputation travels (`OllamaChat.Reflection.*`, `OllamaChat.Goals.Enable`, `OllamaChat.Gossip.*`).
-- Deleted characters take what the module stored about them along - their own history, memories, temperament and bonds, and what other bots kept about them - when they are deleted, or at the next start when a bot reset deleted them straight from the database. A guid the server gives to a new character starts with a clean slate, so a new bot never inherits an old one's memories.
-- Memories stay loaded when a bot logs out; the original dropped them, so a bot that logged in again had forgotten everything until the next restart.
+- `src/CoaChatBridge.h` connects the module with mod-playerbots-auctions and mod-playerbots-immersion without either needing the other: the residents of Immersion tell the bot who it is (a beggar, a legendary veteran, an angler, someone at the bank) and hand over their ambient lines; Auctions hands over the whispers of a deal (items, amounts and prices stay exactly as they are, or the original line is sent) and tells how the bot trades (`OllamaChat.Voice.Enable`).
+- Deleted characters take what the module stored about them along - their own history and temperament, and their roleplay sheet - when they are deleted, or at the next start when a bot reset deleted them straight from the database. A guid the server gives to a new character starts with a clean slate.
 - The original's RAG files (`data/rag`, World of Warcraft as players talk about it) stay switched off.
 
 The rest of this file is the original's documentation; where it says `mod-ollama-chat`, the folder is `mod-ollama-chat-coa` here.
@@ -346,34 +342,10 @@ OllamaChat.Model    = <the model id LM Studio shows in its server tab>
 The module provides several in-game text commands for administrators (Game Masters) to manage and monitor the Ollama chat functionality. All commands require **SEC_ADMINISTRATOR** security level (GM level 3 or higher).
 
 ### `.ollama reload`
-Reloads the module's configuration from `mod-ollama-chat.conf` without restarting the server. Also reloads personality packs and sentiment data.
+Reloads the module's configuration from `mod-ollama-chat.conf` without restarting the server. Also reloads personality packs.
 - **Security Level:** SEC_ADMINISTRATOR
 - **Usage:** `.ollama reload`
 - **Console Equivalent:** `ollama reload`
-
-### `.ollama sentiment view [bot_name] [player_name]`
-Displays sentiment tracking data between bots and players.
-- **Security Level:** SEC_ADMINISTRATOR
-- **Usage:**
-  - `.ollama sentiment view` - Shows all sentiment data
-  - `.ollama sentiment view BotName` - Shows sentiment data for a specific bot
-  - `.ollama sentiment view BotName PlayerName` - Shows sentiment between specific bot and player
-- **Console Equivalent:** `ollama sentiment view [bot] [player]`
-
-### `.ollama sentiment set <bot_name> <player_name> <value>`
-Manually sets the sentiment value between a bot and player (0.0 to 1.0).
-- **Security Level:** SEC_ADMINISTRATOR
-- **Usage:** `.ollama sentiment set BotName PlayerName 0.8`
-- **Console Equivalent:** `ollama sentiment set <bot> <player> <value>`
-
-### `.ollama sentiment reset [bot_name] [player_name]`
-Resets sentiment data to default values.
-- **Security Level:** SEC_ADMINISTRATOR
-- **Usage:**
-  - `.ollama sentiment reset` - Resets all sentiment data
-  - `.ollama sentiment reset BotName` - Resets all sentiment data for a specific bot
-  - `.ollama sentiment reset BotName PlayerName` - Resets sentiment between specific bot and player
-- **Console Equivalent:** `ollama sentiment reset [bot] [player]`
 
 ### `.ollama personality get <bot_name>`
 Displays the current personality assigned to a bot.
@@ -497,45 +469,6 @@ Note that `OllamaChat.Snapshot.IncludeSpells` now defaults to **0**. Listing
 every off-cooldown spell a bot knew put dozens of lines of the most quotable
 text in the prompt, which is why bots talked about their spellbook so much.
 
-## Memory and Relationships
-
-Conversation history is a sliding window. Once a line falls out of it the bot
-has no idea it ever happened, which is why bots otherwise feel like they meet
-you fresh every session. Two mechanisms give them continuity, both bounded so
-the prompt never grows without limit however long a character has been alive.
-
-**Memory.** History accumulates until it crosses a token budget. At that point
-the model condenses it into a handful of short narrator-style notes, each
-scored 1-10 for importance, and the raw history is cleared. At prompt-build
-time the most important notes are selected within a separate, smaller budget.
-A character gradually accumulates what mattered and forgets the small talk.
-
-**Relationships.** When a name comes up often enough in a bot's history, the
-model is asked to write -- or revise -- a sentence on how that bot feels about
-that person. That sentence goes into future prompts, so a character's attitude
-toward you persists and evolves rather than resetting. Whoever the bot is
-currently talking to is always listed first, so their own relationship never
-gets squeezed out by the budget.
-
-Both work in normal mode and in roleplay mode. They complement the numeric
-sentiment score rather than replacing it: sentiment is how warm the bot feels,
-these are *why*.
-
-Condensation and relationship writing are themselves LLM calls, so they run on
-the dispatcher's workers with a stricter queue allowance than replies get --
-background upkeep can never crowd out live conversation.
-
-Requires `data/sql/characters/base/2026_08_29_memory_relationships.sql`.
-Tune it under the `LONG-TERM MEMORY AND RELATIONSHIPS` section of the config.
-
-| Setting | Default | Effect |
-|---|---|---|
-| `Memory.HistoryTokenLimit` | 1500 | How much history accumulates before it is distilled |
-| `Memory.PromptTokenBudget` | 400 | Hard stop on how much of the prompt memories may use |
-| `Memory.MaxPerBot` | 40 | Notes retained per character; least important dropped first |
-| `Relationship.MentionThreshold` | 8 | How often a name must come up before an opinion is written |
-| `Relationship.MaxPerPrompt` | 3 | Relationships included per prompt |
-
 ## Roleplay Mode
 
 Off by default. Turn on with `OllamaChat.Roleplay.Enable`.
@@ -587,7 +520,7 @@ a log line.
 Under `auto` the module asks Ollama what the configured model can actually do
 and only ever sends `think` to a model that reports the capability — so a model
 that cannot think is never asked to. It then spends reasoning only where it
-changes the answer: off for short chat lines, on for sentiment analysis and
+changes the answer: off for short chat lines, on for roleplay sheets and
 strict roleplay replies.
 
 If a live request is ever rejected for asking to think, the module remembers
@@ -624,8 +557,8 @@ Pull requests, bug reports, and feature suggestions are welcome. Please adhere t
 
 ## Roleplay sheets (AFKRoleplay)
 
-The client add-on `client/AddOns/AFKRoleplay` (AFK Realm installs it with the module) shows a roleplay sheet for every character: `/rp` or the **RP** button on the target frame or the inspect window. Write your own with `/rp edit`. A bot's sheet shows how it stands with you as a reputation bar; **Remember** puts a character on your RP friends list (`/rp friends`: online status, zone and standing); bots get theirs written by the language model (ahead of time while it is idle, else when opened). Bots read both when they talk. Settings: `OllamaChat.RP.*`. Details: `docs/2026-11-11-roleplay-sheets.md`.
+The client add-on `client/AddOns/AFKRoleplay` (AFK Realm installs it with the module) shows a roleplay sheet for every character: `/rp` or the **RP** button on the target frame or the inspect window. Write your own with `/rp edit`; bots get theirs written by the language model (ahead of time while it is idle, else when opened). Bots read both when they talk. Settings: `OllamaChat.RP.*`. Details: `docs/2026-11-11-roleplay-sheets.md`.
 
 ## Bot surnames
 
-`AiPlayerbot.CoaBotSurname` (playerbots.conf) chooses the random bots' surname: `1` the surname "Bot", `2` a family name, `0` none. mod-playerbots draws the family names of `2` from one neutral list; with AFK Realm the patch `patches/playerbots-bot-surnames.patch` gives a bot a surname of its people instead, put together from two parts (Stone+hammer, Moon+whisper: 200 to 570 per people) and drawn from its first name, so it never changes. A list of the realm's own in `AiPlayerbot.CoaBotSurnameList` still wins. Applied at the next start; sheets, bonds and memories are keyed by the character and stay through a change of name.
+`AiPlayerbot.CoaBotSurname` (playerbots.conf) chooses the random bots' surname: `1` the surname "Bot", `2` a family name, `0` none. mod-playerbots draws the family names of `2` from one neutral list; with AFK Realm the patch `patches/playerbots-bot-surnames.patch` gives a bot a surname of its people instead, put together from two parts (Stone+hammer, Moon+whisper: 200 to 570 per people) and drawn from its first name, so it never changes. A list of the realm's own in `AiPlayerbot.CoaBotSurnameList` still wins. Applied at the next start; sheets and personalities are keyed by the character and stay through a change of name.

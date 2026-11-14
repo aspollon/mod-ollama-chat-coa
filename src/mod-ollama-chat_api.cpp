@@ -699,9 +699,9 @@ OllamaApiResult QueryOllama(const std::string& prompt, OllamaRequestKind kind,
     if (maxTokens > 0)
         cfg.numPredict = maxTokens;   // a roleplay sheet is longer than a chat line
 
-    // The system prompt tells the model how a character speaks. Sentiment, memory and relationship requests are
-    // judgements in a fixed format, not speech, and that prompt would only get in their way.
-    if (kind == OllamaRequestKind::Sentiment)
+    // Background requests (roleplay sheets) are not speech; the chat system
+    // prompt would only get in their way.
+    if (kind == OllamaRequestKind::Background)
         cfg.systemPrompt.clear();
 
     // One place decides what the "think" field should be: policy for this

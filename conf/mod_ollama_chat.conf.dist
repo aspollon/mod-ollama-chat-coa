@@ -505,9 +505,9 @@ OllamaChat.EventChatterMaxBotsPerPlayer = 2
 # OllamaChat.EventChatterPromptTemplate
 #     Description: The template used to generate bot prompts when reacting to world events.
 
-#     Placeholders (named): {bot_name} {bot_level} {bot_class} {bot_race} {bot_gender} {bot_role} {bot_faction} {bot_area} {bot_zone} {bot_map} {bot_personality} {bot_personality_name} {event_type} {event_detail} {actor_name} {sentiment_info}
+#     Placeholders (named): {bot_name} {bot_level} {bot_class} {bot_race} {bot_gender} {bot_role} {bot_faction} {bot_area} {bot_zone} {bot_map} {bot_personality} {bot_personality_name} {event_type} {event_detail} {actor_name}
 #     Note: {bot_personality_name} contains the name/key of the personality (e.g., "grumpy", "helpful"), while {bot_personality} contains the full personality description text.
-OllamaChat.EventChatterPromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} ({bot_gender}) of the {bot_faction}, in {bot_area}, {bot_zone}. Your temperament: {bot_personality} {sentiment_info} Just now: {actor_name} {event_type} {event_detail}. Say one short line about it."
+OllamaChat.EventChatterPromptTemplate = "You are {bot_name}, a level {bot_level} {bot_race} {bot_class} ({bot_gender}) of the {bot_faction}, in {bot_area}, {bot_zone}. Your temperament: {bot_personality} Just now: {actor_name} {event_type} {event_detail}. Say one short line about it."
 
 # --------------------------------------------
 # TYPING SIMULATION
@@ -621,50 +621,15 @@ OllamaChat.ChatHistoryFooterTemplate = "{player_name} now says to you: {player_m
 #   Placeholders (named): {combat} {group} {spells} {quests} {los} {players}
 OllamaChat.ChatBotSnapshotTemplate = "CURRENT CONTEXT:\n{combat}\n{group}\nSpells:\n{spells}\nQuests:\n{quests}\nVisible Objects:\n{los}\nNearby Players:\n{players}"
 
-# ----------------------------------------------
-# SENTIMENT TRACKING SYSTEM
-# ----------------------------------------------
-
-# Enable or disable sentiment tracking between bots and players
-# Disabled by default due to needing an extra LLM call.
-# Default: 0 (disabled)
-OllamaChat.EnableSentimentTracking = 0
-
-# Default sentiment value for new bot-player relationships
-# Range: 0.0 (hostile) to 1.0 (friendly), 0.5 = neutral
-# Default: 0.5
-OllamaChat.SentimentDefaultValue = 0.5
-
-# How much to adjust sentiment per positive/negative message
-# Range: 0.01 to 0.5 (smaller = more gradual changes)
-# Default: 0.05
-OllamaChat.SentimentAdjustmentStrength = 0.05
-
-# How often to save sentiment data to database (in minutes)
-# Set to 0 to disable periodic saving
-# Only bot/player pairs whose sentiment actually moved are written.
-# Default: 10
-OllamaChat.SentimentSaveInterval = 10
-
-# Prompt template for sentiment analysis
-# Use {message} placeholder for the message to analyze
-# Default: "Analyze the sentiment of this message: \"{message}\". Respond only with: POSITIVE, NEGATIVE, or NEUTRAL."
-OllamaChat.SentimentAnalysisPrompt = "Someone in a fantasy world says to another person: \"{message}\". Judge only how the speaker treats the listener, not the topic. Talking about fighting, killing, enemies, monsters, quests or danger is NEUTRAL. FRIENDLY: warm, kind, thankful or joking with the listener. ROMANTIC: flirting with the listener. HOSTILE: only an insult, a threat or contempt aimed at the listener. Answer with one word only: FRIENDLY, ROMANTIC, HOSTILE or NEUTRAL."
-
-# Template for including sentiment information in bot prompts
-# Use {player_name} and {sentiment_value} placeholders
-# Default: "Your relationship sentiment with {player_name} is {sentiment_value} (0.0=hostile, 0.5=neutral, 1.0=friendly). Use this to guide your tone and response."
-OllamaChat.SentimentPromptTemplate = "Your relationship sentiment with {player_name} is {sentiment_value} (0.0=hostile, 0.5=neutral, 1.0=friendly). Use this to guide your tone and response."
-
 # --------------------------------------------
 # CHAT/PROMPT TEMPLATES
 # --------------------------------------------
 
 # OllamaChat.ChatPromptTemplate
 #   Description: The main template for bot chat prompts sent to the LLM.
-#   Placeholders (named): {bot_name} {bot_level} {bot_class} {bot_personality} {bot_personality_name} {player_level} {player_class} {player_name} {player_message} {extra_info} {sentiment_info}
+#   Placeholders (named): {bot_name} {bot_level} {bot_class} {bot_personality} {bot_personality_name} {player_level} {player_class} {player_name} {player_message} {extra_info}
 #   Note: {bot_personality_name} contains the name/key of the personality (e.g., "grumpy", "helpful"), while {bot_personality} contains the full personality description text.
-OllamaChat.ChatPromptTemplate = "You are {bot_name}, a level {bot_level} {bot_class}. Your temperament: {bot_personality} {sentiment_info} {extra_info} You are talking with {player_name}, a level {player_level} {player_class}."
+OllamaChat.ChatPromptTemplate = "You are {bot_name}, a level {bot_level} {bot_class}. Your temperament: {bot_personality} {extra_info} You are talking with {player_name}, a level {player_level} {player_class}."
 
 # OllamaChat.ChatExtraInfoTemplate
 #   Description: The context/details string about the bot and player, injected into the chat prompt as the last parameter.
@@ -1114,8 +1079,8 @@ OllamaChat.RAGPromptTemplate = "RELEVANT INFORMATION:\n{rag_info}\nUse this info
 #        Under auto, reasoning is spent only where it changes the answer:
 #            chat replies / random chatter / event chatter -> off
 #              (short, latency-sensitive, nothing to reason about)
-#            sentiment analysis                            -> on
-#              (a judgement call, and never shown to players)
+#            roleplay sheets (background)                  -> on
+#              (text that is never shown as chat)
 #            roleplay replies at Strictness 2              -> on
 #
 #        on  = always think, when the model supports it.
@@ -1490,21 +1455,6 @@ OllamaChat.Lore.Enable = 1
 #     Default:     2
 OllamaChat.Lore.MaxTopics = 2
 
-# OllamaChat.Bond.Enable
-#     Description: Conquest of Azeroth. Every bot has a bond with each person it knows: stranger, someone it likes,
-#                  friend, closest friend - or someone it distrusts, dislikes, its enemy. Friendly words and things
-#                  gone through together (hard fights, quests, duels, trades) bring it closer, insults push it away.
-#                  The bot also knows when it last spoke with someone and what about. Needs EnableSentimentTracking
-#                  for how messages sound.
-#     Default:     1
-OllamaChat.Bond.Enable = 1
-
-# OllamaChat.Bond.Romance
-#     Description: A bond can become more than friendship when a person flirts with a bot that is already their
-#                  friend: drawn to them, then beloved. Always tasteful, never explicit. 0: friendship only.
-#     Default:     1
-OllamaChat.Bond.Romance = 1
-
 # OllamaChat.Voice.Enable
 #     Description: Conquest of Azeroth. Other modules hand their lines to the language model, which says them in the
 #                  bot's own words: the trade talk of mod-playerbots-auctions (prices, items and amounts stay exactly
@@ -1521,67 +1471,6 @@ OllamaChat.Voice.Enable = 1
 #                  and duels, and for bots in the person's group. 0: bots go about their business while talking.
 #     Default:     90
 OllamaChat.Conversation.HoldSeconds = 90
-
-###################################################################################################
-# CONQUEST OF AZEROTH: MEMORY LIKE "GENERATIVE AGENTS"
-#
-# After "Generative Agents: Interactive Simulacra of Human Behavior" (Park et al., 2023): every bot
-# keeps a stream of memories (what it went through, notes from conversations, what it concluded,
-# what it wants, what it heard). For each line it chooses the memories that matter right now by
-# recency, importance and relevance; it reflects on what happened and draws conclusions; it has
-# goals of its own; and bots pass on to each other what they went through with people.
-###################################################################################################
-
-# OllamaChat.Recall.EmbedModel
-#     Description: An Ollama embedding model for choosing memories by meaning instead of by shared words, for
-#                  example "nomic-embed-text" (install it once with: ollama pull nomic-embed-text). Empty: words.
-#                  Only with OllamaChat.Provider = ollama.
-#     Default:     ""
-OllamaChat.Recall.EmbedModel = ""
-
-# OllamaChat.Reflection.Enable
-#     Description: Bots that have dealt with real people think now and then about what they went through: the
-#                  language model asks what is worth thinking about, gathers the memories that bear on it and draws
-#                  up to three conclusions ("You trust Chris with your life."), which become memories themselves.
-#     Default:     1
-OllamaChat.Reflection.Enable = 1
-
-# OllamaChat.Reflection.Threshold
-#     Description: How much has to happen before a bot reflects: the sum of the importance (1-10) of its new
-#                  memories. A hard fight together counts 7, a finished task 2 to 5.
-#     Default:     30
-OllamaChat.Reflection.Threshold = 30
-
-# OllamaChat.Reflection.MinMinutes
-#     Description: At most one reflection per bot in this many minutes.
-#     Default:     30
-OllamaChat.Reflection.MinMinutes = 30
-
-# OllamaChat.Reflection.MaxPerHour
-#     Description: Reflections and goals of all bots together per hour: each takes the language model one or two
-#                  requests in the background. 0: no limit.
-#     Default:     12
-OllamaChat.Reflection.MaxPerHour = 12
-
-# OllamaChat.Goals.Enable
-#     Description: Bots that have dealt with real people get two goals or dreams of their own that fit their
-#                  people and temperament ("You want to save enough for a better sword."), revised as they reflect.
-#                  They talk about them as wishes, never as what they are doing right now - what a bot does is still
-#                  up to Playerbots.
-#     Default:     1
-OllamaChat.Goals.Enable = 1
-
-# OllamaChat.Gossip.Enable
-#     Description: When two bots talk, each may tell the other something it went through with a real person, which
-#                  the other remembers as something it heard. A bot you never met may know you from the stories.
-#     Default:     1
-OllamaChat.Gossip.Enable = 1
-
-# OllamaChat.Gossip.Chance
-#     Description: The chance (percent) that a bot passes something on when two bots talk; at most once in half an
-#                  hour between the same two.
-#     Default:     30
-OllamaChat.Gossip.Chance = 30
 
 ###############################################################################
 #
@@ -1942,108 +1831,6 @@ OllamaChat.Chatter.UseLookingForGroupChannel = 0
 #        Default: 0
 OllamaChat.Chatter.UseGuildRecruitmentChannel = 0
 
-###############################################################################
-#
-#   OLLAMA CHAT - LONG-TERM MEMORY AND RELATIONSHIPS
-#
-#   Conversation history is a sliding window: once a line falls out of it, the
-#   bot has no idea it ever happened. That is why bots otherwise feel like they
-#   meet you fresh every session no matter how much you have talked.
-#
-#   Two mechanisms fix that, both bounded so the prompt never grows without
-#   limit however long a character has been alive:
-#
-#     MEMORY         History accumulates until it crosses a token budget, at
-#                    which point the model condenses it into a few short
-#                    narrator-style notes with importance scores and the raw
-#                    history is cleared. The most important notes are then
-#                    selected into each prompt within a smaller budget.
-#
-#     RELATIONSHIPS  When a name comes up often enough in a bot's history, the
-#                    model writes (or revises) a sentence on how that bot feels
-#                    about that person. It goes into future prompts, so a bot's
-#                    attitude persists and evolves rather than resetting.
-#
-#   Both work in normal mode and roleplay mode. They complement the numeric
-#   sentiment score, which stays as-is — this is the qualitative half.
-#
-#   Requires the tables from
-#   data/sql/characters/base/2026_08_29_memory_relationships.sql
-#
-###############################################################################
-
-#    OllamaChat.Memory.Enable
-#        Master switch for long-term memory.
-#        Default: 1
-OllamaChat.Memory.Enable = 1
-
-#    OllamaChat.Memory.HistoryTokenLimit
-#        Condense once a bot's accumulated history exceeds roughly this many
-#        tokens. Lower = memories form sooner but from less material.
-#        0 disables condensation (history then just rolls off as before).
-#        Default: 1500
-OllamaChat.Memory.HistoryTokenLimit = 1500
-
-#    OllamaChat.Memory.PromptTokenBudget
-#        How much of each prompt remembered notes may occupy. This is the hard
-#        stop on prompt growth.
-#        Default: 400
-OllamaChat.Memory.PromptTokenBudget = 400
-
-#    OllamaChat.Memory.MaxPerBot
-#        Notes retained per character. When exceeded the least important are
-#        dropped.
-#        Default: 40
-OllamaChat.Memory.MaxPerBot = 80
-
-#    OllamaChat.Memory.SaveInterval
-#        Minutes between writes of memories and relationships to the database.
-#        Default: 10
-OllamaChat.Memory.SaveInterval = 10
-
-#    OllamaChat.Memory.CondensePrompt
-#        Prompt used to distil history into memories.
-#        Placeholders: {bot_name} {history}
-#        The model is asked for one note per line, prefixed "N | " where N is
-#        an importance from 1 to 10. Leave unset to use the built-in default.
-# OllamaChat.Memory.CondensePrompt = ""
-
-#    OllamaChat.Memory.PromptTemplate
-#        How remembered notes are introduced in the prompt.
-#        Placeholder: {memories}
-# OllamaChat.Memory.PromptTemplate = " Things you remember:\n{memories}"
-
-#    OllamaChat.Relationship.Enable
-#        Default: 1
-OllamaChat.Relationship.Enable = 1
-
-#    OllamaChat.Relationship.MentionThreshold
-#        How many times a name must come up before the character's view of that
-#        person is written or revised. Lower = relationships form faster and
-#        cost more LLM calls.
-#        Default: 8
-OllamaChat.Relationship.MentionThreshold = 8
-
-#    OllamaChat.Relationship.MaxPerPrompt
-#        How many relationships to include in a prompt. Whoever the bot is
-#        currently talking to is always listed first, so their own relationship
-#        never gets squeezed out.
-#        Default: 3
-OllamaChat.Relationship.MaxPerPrompt = 3
-
-#    OllamaChat.Relationship.MaxLength
-#        Maximum characters kept from the model's description.
-#        Default: 220
-OllamaChat.Relationship.MaxLength = 220
-
-#    OllamaChat.Relationship.UpdatePrompt
-#        Placeholders: {bot_name} {other_name} {existing} {history}
-# OllamaChat.Relationship.UpdatePrompt = ""
-
-#    OllamaChat.Relationship.PromptTemplate
-#        Placeholder: {relationships}
-# OllamaChat.Relationship.PromptTemplate = " How you feel about people you know:\n{relationships}"
-
 # --------------------------------------------
 # ENVIRONMENTAL/CONTEXTUAL TEMPLATES (continued)
 # --------------------------------------------
@@ -2130,25 +1917,6 @@ OllamaChat.Roleplay.QuestionVariations = Ask whether the road ahead is safe.|Ask
 #   Empty = use the built-in default.
 OllamaChat.EmoteReactionPromptTemplate = ""
 
-# OllamaChat.Memory.CondensePrompt
-#   Description: Prompt that distils a bot’s conversation history into long-term memories.
-#   Empty = use the built-in default.
-OllamaChat.Memory.CondensePrompt = ""
-
-# OllamaChat.Memory.PromptTemplate
-#   Description: Wrapper around the memory list injected into a prompt.
-#   Empty = use the built-in default.
-OllamaChat.Memory.PromptTemplate = ""
-
-# OllamaChat.Relationship.PromptTemplate
-#   Description: Wrapper around the relationship list injected into a prompt.
-#   Empty = use the built-in default.
-OllamaChat.Relationship.PromptTemplate = ""
-
-# OllamaChat.Relationship.UpdatePrompt
-#   Description: Prompt that rewrites how a bot feels about someone.
-#   Empty = use the built-in default.
-OllamaChat.Relationship.UpdatePrompt = ""
 
 # --------------------------------------------
 # OPTIONAL SAMPLING PENALTIES

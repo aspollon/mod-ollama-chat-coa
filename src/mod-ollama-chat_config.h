@@ -6,7 +6,6 @@
 #include <vector>
 #include <deque>
 #include <unordered_map>
-#include <set>
 #include <utility>
 #include <mutex>
 #include <ctime>
@@ -250,21 +249,9 @@ extern uint32_t g_ApproachCooldownMinutes;
 extern bool     g_LoreEnable;
 extern uint32_t g_LoreMaxTopics;
 
-// Conquest of Azeroth: bonds between bots and people, and the voice other modules hand their lines to.
-extern bool     g_BondEnable;
-extern bool     g_BondRomance;
+// Conquest of Azeroth: the voice other modules hand their lines to.
 extern bool     g_VoiceEnable;
 extern uint32_t g_ConversationHoldSeconds;
-
-// Conquest of Azeroth, after "Generative Agents" (Park et al., 2023): recall, reflection, goals, rumours.
-extern std::string g_RecallEmbedModel;      // "" = memories chosen by keywords
-extern bool     g_ReflectionEnable;
-extern uint32_t g_ReflectionThreshold;      // sum of importance of new memories before a bot reflects
-extern uint32_t g_ReflectionMinMinutes;
-extern uint32_t g_ReflectionMaxPerHour;     // all bots together
-extern bool     g_GoalsEnable;
-extern bool     g_GossipEnable;
-extern uint32_t g_GossipChance;   // a bot in a conversation stays with the person this long after the last line
 
 extern std::vector<std::string> g_EnvCommentNearbyPlayer;
 extern std::vector<std::string> g_EnvCommentGroupMember;
@@ -329,26 +316,6 @@ extern uint32_t g_EmoteReplyCounterWeight;
 extern uint32_t g_EmoteReplySpeakWeight;
 extern uint32_t g_EmoteReactionCooldownSeconds;
 extern std::string g_EmoteReactionPromptTemplate;
-
-// --------------------------------------------
-// Long-term memory and relationships
-// --------------------------------------------
-extern bool        g_MemoryEnable;
-extern uint32_t    g_MemoryHistoryTokenLimit;   // condense once history exceeds this
-extern uint32_t    g_MemoryPromptTokenBudget;   // how much of the prompt memories may use
-extern uint32_t    g_MemoryMaxPerBot;
-extern uint32_t    g_MemorySaveInterval;        // minutes
-extern std::string g_MemoryCondensePrompt;
-extern std::string g_MemoryPromptTemplate;
-
-extern bool        g_RelationshipEnable;
-extern uint32_t    g_RelationshipMentionThreshold;
-extern uint32_t    g_RelationshipMaxPerPrompt;
-extern uint32_t    g_RelationshipMaxLength;
-extern std::string g_RelationshipUpdatePrompt;
-extern std::string g_RelationshipPromptTemplate;
-
-extern time_t      g_LastMemorySaveTime;
 
 // --------------------------------------------
 // Environment/Contextual Random Chatter Templates
@@ -431,24 +398,6 @@ extern int g_GuildEventTypeGuildDemotion_Chance;
 extern int g_GuildEventTypeGuildAchievement_Chance;
 extern int g_GuildEventTypeLevelUp_Chance;
 extern int g_GuildEventTypeDungeonComplete_Chance;
-
-// --------------------------------------------
-// Bot-Player Sentiment Tracking System
-// --------------------------------------------
-extern bool        g_EnableSentimentTracking;
-extern float       g_SentimentDefaultValue;              // Default sentiment value (0.5 = neutral)
-extern float       g_SentimentAdjustmentStrength;        // How much to adjust sentiment per message (0.1)
-extern uint32_t    g_SentimentSaveInterval;              // How often to save sentiment to DB (minutes)
-extern std::string g_SentimentAnalysisPrompt;            // Prompt template for sentiment analysis
-extern std::string g_SentimentPromptTemplate;            // Template for including sentiment in bot prompts
-
-// In-memory sentiment storage and mutex
-extern std::unordered_map<uint64_t, std::unordered_map<uint64_t, float>> g_BotPlayerSentiments;
-// (bot_guid, player_guid) pairs changed since the last save. Only these are
-// written; the map as a whole is not re-REPLACE INTO'd every interval.
-extern std::set<std::pair<uint64_t, uint64_t>> g_DirtySentiments;
-extern std::mutex g_SentimentMutex;
-extern time_t g_LastSentimentSaveTime;
 
 // --------------------------------------------
 // RAG (Retrieval-Augmented Generation) System

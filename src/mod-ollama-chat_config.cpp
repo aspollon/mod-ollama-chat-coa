@@ -1,6 +1,5 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_rp.h"
-#include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_rag.h"
@@ -9,7 +8,6 @@
 #include "mod-ollama-chat_api.h"
 #include "mod-ollama-chat_capability.h"
 #include "mod-ollama-chat_dispatch.h"
-#include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_roleplay.h"
 #include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_presence.h"
@@ -198,18 +196,8 @@ uint32_t g_ApproachChance = 40;
 uint32_t g_ApproachCooldownMinutes = 15;
 bool     g_LoreEnable = true;
 uint32_t g_LoreMaxTopics = 2;
-bool     g_BondEnable = true;
-bool     g_BondRomance = true;
 bool     g_VoiceEnable = true;
 uint32_t g_ConversationHoldSeconds = 90;
-std::string g_RecallEmbedModel;
-bool     g_ReflectionEnable = true;
-uint32_t g_ReflectionThreshold = 30;
-uint32_t g_ReflectionMinMinutes = 30;
-uint32_t g_ReflectionMaxPerHour = 12;
-bool     g_GoalsEnable = true;
-bool     g_GossipEnable = true;
-uint32_t g_GossipChance = 30;
 
 std::vector<std::string> g_EnvCommentNearbyPlayer;
 std::vector<std::string> g_EnvCommentGroupMember;
@@ -263,26 +251,6 @@ uint32_t    g_EmoteReplyCounterWeight      = 30;
 uint32_t    g_EmoteReplySpeakWeight        = 15;
 uint32_t    g_EmoteReactionCooldownSeconds = 20;
 std::string g_EmoteReactionPromptTemplate;
-
-// --------------------------------------------
-// Long-term memory and relationships
-// --------------------------------------------
-bool        g_MemoryEnable             = true;
-uint32_t    g_MemoryHistoryTokenLimit  = 1500;
-uint32_t    g_MemoryPromptTokenBudget  = 400;
-uint32_t    g_MemoryMaxPerBot          = 40;
-uint32_t    g_MemorySaveInterval       = 10;
-std::string g_MemoryCondensePrompt;
-std::string g_MemoryPromptTemplate;
-
-bool        g_RelationshipEnable            = true;
-uint32_t    g_RelationshipMentionThreshold  = 8;
-uint32_t    g_RelationshipMaxPerPrompt      = 3;
-uint32_t    g_RelationshipMaxLength         = 220;
-std::string g_RelationshipUpdatePrompt;
-std::string g_RelationshipPromptTemplate;
-
-time_t      g_LastMemorySaveTime = time(nullptr);
 
 // --------------------------------------------
 // Random Chatter Timing
@@ -339,22 +307,6 @@ std::mutex g_ConversationHistoryMutex;
 // value made the very first world tick fire a full save of a store that had
 // only just been loaded from the same table.
 time_t g_LastHistorySaveTime = time(nullptr);
-
-// --------------------------------------------
-// Bot-Player Sentiment Tracking System
-// --------------------------------------------
-bool        g_EnableSentimentTracking = true;
-float       g_SentimentDefaultValue = 0.5f;              // Default sentiment value (0.5 = neutral)
-float       g_SentimentAdjustmentStrength = 0.1f;        // How much to adjust sentiment per message
-uint32_t    g_SentimentSaveInterval = 10;                // How often to save sentiment to DB (minutes)
-std::string g_SentimentAnalysisPrompt = "Analyze the sentiment of this message: \"{message}\". Respond only with: POSITIVE, NEGATIVE, or NEUTRAL.";
-std::string g_SentimentPromptTemplate = "Your relationship sentiment with {player_name} is {sentiment_value} (0.0=hostile, 0.5=neutral, 1.0=friendly). Use this to guide your tone and response.";
-
-// In-memory sentiment storage and mutex
-std::unordered_map<uint64_t, std::unordered_map<uint64_t, float>> g_BotPlayerSentiments;
-std::set<std::pair<uint64_t, uint64_t>> g_DirtySentiments;
-std::mutex g_SentimentMutex;
-time_t g_LastSentimentSaveTime = time(nullptr);
 
 // --------------------------------------------
 // RAG (Retrieval-Augmented Generation) System
@@ -730,14 +682,6 @@ void LoadOllamaChatConfig()
     g_EnableChatHistory               = sConfigMgr->GetOption<bool>("OllamaChat.EnableChatHistory", true);
     g_ReuseConversationContext        = sConfigMgr->GetOption<bool>("OllamaChat.ReuseConversationContext", true);
 
-    // Bot-Player Sentiment Tracking
-    g_EnableSentimentTracking         = sConfigMgr->GetOption<bool>("OllamaChat.EnableSentimentTracking", true);
-    g_SentimentDefaultValue           = sConfigMgr->GetOption<float>("OllamaChat.SentimentDefaultValue", 0.5f);
-    g_SentimentAdjustmentStrength     = sConfigMgr->GetOption<float>("OllamaChat.SentimentAdjustmentStrength", 0.1f);
-    g_SentimentSaveInterval           = sConfigMgr->GetOption<uint32_t>("OllamaChat.SentimentSaveInterval", 10);
-    g_SentimentAnalysisPrompt         = sConfigMgr->GetOption<std::string>("OllamaChat.SentimentAnalysisPrompt", "Analyze the sentiment of this message: \"{message}\". Respond only with: POSITIVE, NEGATIVE, or NEUTRAL.");
-    g_SentimentPromptTemplate         = sConfigMgr->GetOption<std::string>("OllamaChat.SentimentPromptTemplate", "Your relationship sentiment with {player_name} is {sentiment_value} (0.0=hostile, 0.5=neutral, 1.0=friendly). Use this to guide your tone and response.");
-
     // RAG (Retrieval-Augmented Generation) System
     g_EnableRAG                       = sConfigMgr->GetOption<bool>("OllamaChat.EnableRAG", false);
     g_RAGDataPath                     = sConfigMgr->GetOption<std::string>("OllamaChat.RAGDataPath", "rag/");
@@ -749,50 +693,6 @@ void LoadOllamaChatConfig()
     g_ChatterUseTradeChannel            = sConfigMgr->GetOption<bool>("OllamaChat.Chatter.UseTradeChannel", true);
     g_ChatterUseLfgChannel              = sConfigMgr->GetOption<bool>("OllamaChat.Chatter.UseLookingForGroupChannel", false);
     g_ChatterUseGuildRecruitmentChannel = sConfigMgr->GetOption<bool>("OllamaChat.Chatter.UseGuildRecruitmentChannel", false);
-
-    // --- Long-term memory and relationships ------------------------------
-    g_MemoryEnable                 = sConfigMgr->GetOption<bool>("OllamaChat.Memory.Enable", true);
-    g_MemoryHistoryTokenLimit      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Memory.HistoryTokenLimit", 1500);
-    g_MemoryPromptTokenBudget      = sConfigMgr->GetOption<uint32_t>("OllamaChat.Memory.PromptTokenBudget", 400);
-    g_MemoryMaxPerBot              = sConfigMgr->GetOption<uint32_t>("OllamaChat.Memory.MaxPerBot", 40);
-    g_MemorySaveInterval           = sConfigMgr->GetOption<uint32_t>("OllamaChat.Memory.SaveInterval", 10);
-
-    g_MemoryCondensePrompt         = sConfigMgr->GetOption<std::string>("OllamaChat.Memory.CondensePrompt", "");
-    if (g_MemoryCondensePrompt.empty())
-    {
-        g_MemoryCondensePrompt =
-            "You are {bot_name}. Below is a record of conversations you took part in.\n"
-            "{history}\n"
-            "Write the handful of things worth remembering long after the words are forgotten: "
-            "what happened, what you learned about someone, how something made you feel. "
-            "One per line. Prefix each with an importance from 1 to 10 and a pipe, like "
-            "\"7 | ...\". Write them in the third person as short factual notes, at most 20 words each. "
-            "Skip small talk. If nothing is worth keeping, write nothing.";
-    }
-
-    g_MemoryPromptTemplate         = sConfigMgr->GetOption<std::string>("OllamaChat.Memory.PromptTemplate", "");
-    if (g_MemoryPromptTemplate.empty())
-        g_MemoryPromptTemplate = " Things you remember:\n{memories}";
-
-    g_RelationshipEnable           = sConfigMgr->GetOption<bool>("OllamaChat.Relationship.Enable", true);
-    g_RelationshipMentionThreshold = sConfigMgr->GetOption<uint32_t>("OllamaChat.Relationship.MentionThreshold", 8);
-    g_RelationshipMaxPerPrompt     = sConfigMgr->GetOption<uint32_t>("OllamaChat.Relationship.MaxPerPrompt", 3);
-    g_RelationshipMaxLength        = sConfigMgr->GetOption<uint32_t>("OllamaChat.Relationship.MaxLength", 220);
-
-    g_RelationshipUpdatePrompt     = sConfigMgr->GetOption<std::string>("OllamaChat.Relationship.UpdatePrompt", "");
-    if (g_RelationshipUpdatePrompt.empty())
-    {
-        g_RelationshipUpdatePrompt =
-            "You are {bot_name}. What you currently think of {other_name}: {existing}\n"
-            "Recent conversations:\n{history}\n"
-            "In one or two sentences, write how you now feel about {other_name} and why. "
-            "Revise your earlier view only if these conversations actually changed it. "
-            "Write it as a plain statement, no quotes, no preamble.";
-    }
-
-    g_RelationshipPromptTemplate   = sConfigMgr->GetOption<std::string>("OllamaChat.Relationship.PromptTemplate", "");
-    if (g_RelationshipPromptTemplate.empty())
-        g_RelationshipPromptTemplate = " How you feel about people you know:\n{relationships}";
 
     // --- Optional sampling controls --------------------------------------
     // Left unset by default so nothing changes unless an operator opts in.
@@ -858,18 +758,8 @@ void LoadOllamaChatConfig()
     g_ApproachCooldownMinutes         = sConfigMgr->GetOption<uint32_t>("OllamaChat.Approach.CooldownMinutes", 15);
     g_LoreEnable                      = sConfigMgr->GetOption<bool>("OllamaChat.Lore.Enable", true);
     g_LoreMaxTopics                   = std::min<uint32_t>(4, sConfigMgr->GetOption<uint32_t>("OllamaChat.Lore.MaxTopics", 2));
-    g_BondEnable                      = sConfigMgr->GetOption<bool>("OllamaChat.Bond.Enable", true);
-    g_BondRomance                     = sConfigMgr->GetOption<bool>("OllamaChat.Bond.Romance", true);
     g_VoiceEnable                     = sConfigMgr->GetOption<bool>("OllamaChat.Voice.Enable", true);
     g_ConversationHoldSeconds         = std::min<uint32_t>(600, sConfigMgr->GetOption<uint32_t>("OllamaChat.Conversation.HoldSeconds", 90));
-    g_RecallEmbedModel                = sConfigMgr->GetOption<std::string>("OllamaChat.Recall.EmbedModel", "");
-    g_ReflectionEnable                = sConfigMgr->GetOption<bool>("OllamaChat.Reflection.Enable", true);
-    g_ReflectionThreshold             = std::max<uint32_t>(5, sConfigMgr->GetOption<uint32_t>("OllamaChat.Reflection.Threshold", 30));
-    g_ReflectionMinMinutes            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Reflection.MinMinutes", 30);
-    g_ReflectionMaxPerHour            = sConfigMgr->GetOption<uint32_t>("OllamaChat.Reflection.MaxPerHour", 12);
-    g_GoalsEnable                     = sConfigMgr->GetOption<bool>("OllamaChat.Goals.Enable", true);
-    g_GossipEnable                    = sConfigMgr->GetOption<bool>("OllamaChat.Gossip.Enable", true);
-    g_GossipChance                    = std::min<uint32_t>(100, sConfigMgr->GetOption<uint32_t>("OllamaChat.Gossip.Chance", 30));
 
     // --- Snapshot limits -------------------------------------------------
     g_SnapshotIncludeSpells           = sConfigMgr->GetOption<bool>("OllamaChat.Snapshot.IncludeSpells", false);
@@ -1274,20 +1164,12 @@ void OllamaChatConfigWorldScript::OnStartup()
     Hygiene_Run();
     LoadBotPersonalityList();
     LoadBotConversationHistoryFromDB();
-    InitializeSentimentTracking();
     Roleplay_Load();
-    Memory_Load();
-    Bond_Load();
     Bond_RegisterBridge();
     Presence_RegisterBridge();
 
-    // Spread the three periodic saves so they do not all come due on the same
-    // world tick. Each is incremental now, but they queue onto one database
-    // worker and there is no reason to bunch them.
-    const time_t nowSeed = time(nullptr);
-    g_LastHistorySaveTime   = nowSeed;
-    g_LastMemorySaveTime    = nowSeed + static_cast<time_t>(g_MemorySaveInterval) * 60 / 3;
-    g_LastSentimentSaveTime = nowSeed + static_cast<time_t>(g_SentimentSaveInterval) * 60 * 2 / 3;
+    // Seed the periodic history save so it does not fire on the first tick.
+    g_LastHistorySaveTime = time(nullptr);
 
     // Ask Ollama what this model can actually do. Runs on its own thread so a
     // missing or slow Ollama cannot stall worldserver startup; until it
@@ -1321,10 +1203,6 @@ void OllamaChatConfigWorldScript::OnShutdown()
     OllamaDispatch_Stop();
 
     SaveBotConversationHistoryToDB();
-    Memory_SaveAll();
-    Bond_SaveAll();
-    if (g_EnableSentimentTracking)
-        SaveBotPlayerSentimentsToDB();
 
     // Clean up RAG system
     if (g_RAGSystem) {

@@ -45,9 +45,9 @@ void AppendBotConversation(uint64_t botGuid, uint64_t playerGuid,
 // The chat prompt is built in two parts. `staticPrompt` is everything that
 // stays the same for the whole conversation (identity, personality, lore,
 // voice, roleplay sheets, gesture rules); `turn` is what changed or is new
-// (situation, sentiment, relationship, message-specific lore, memories, the
-// new line). A first contact sends both. A continued conversation sends only
-// `turn` and lets Ollama continue from its stored token context.
+// (situation, message-specific lore, the new line). A first contact sends
+// both. A continued conversation sends only `turn` and lets Ollama continue
+// from its stored token context.
 struct BotPromptParts
 {
     std::string staticPrompt;

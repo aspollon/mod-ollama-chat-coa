@@ -4,14 +4,11 @@
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_expression.h"
 #include "mod-ollama-chat_governor.h"
-#include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
-#include "mod-ollama-chat_sentiment.h"
 #include "mod-ollama-chat-utilities.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_coa.h"
-#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_presence.h"
 
 #include "CellImpl.h"
@@ -44,27 +41,15 @@ namespace
 {
     using Clock = std::chrono::steady_clock;
 
-    enum class TaskType : uint8_t { ChatReply, Sentiment, Condense, Relationship, Job };
+    enum class TaskType : uint8_t { ChatReply, Job };
 
     struct Task
     {
         TaskType          type = TaskType::ChatReply;
         OllamaChatRequest request;
 
-        // Sentiment-only payload.
-        uint64_t    sentimentBotGuid    = 0;
-        uint64_t    sentimentPlayerGuid = 0;
-        std::string sentimentMessage;
-        std::string sentimentPrompt;
-
         // Background job payload.
         std::function<void()> job;
-
-        // Memory / relationship payload.
-        uint64_t    memoryBotGuid   = 0;
-        uint64_t    memoryOtherGuid = 0;
-        std::string memoryOtherName;
-        std::string memoryPrompt;
     };
 
     struct Completion
@@ -367,12 +352,8 @@ namespace
 
     void RunChatTask(const Task& task)
     {
-        // The memories for this moment are chosen here, on the worker: weighing every one of them by recency,
-        // importance and relevance (with embeddings, a call of its own) is no work for the world thread.
-        const std::string prompt = Memory_ResolveRecall(task.request.prompt);
-        const std::string turnPrompt = task.request.turnPrompt.empty()
-            ? std::string()
-            : Memory_ResolveRecall(task.request.turnPrompt);
+        const std::string prompt = task.request.prompt;
+        const std::string turnPrompt = task.request.turnPrompt;
 
         uint32_t emoteId = 0;
         std::string action;
@@ -479,15 +460,6 @@ namespace
         g_done.push_back(std::move(completion));
     }
 
-    void RunSentimentTask(const Task& task)
-    {
-        // Sentiment touches only mutex-guarded in-memory state and async DB
-        // writes, so it completes here rather than round-tripping to the
-        // world thread.
-        ApplySentimentAnalysis(task.sentimentBotGuid, task.sentimentPlayerGuid,
-                               task.sentimentMessage, task.sentimentPrompt);
-    }
-
     void WorkerLoop()
     {
         for (;;)
@@ -511,16 +483,6 @@ namespace
             {
                 switch (task.type)
                 {
-                    case TaskType::Sentiment:
-                        RunSentimentTask(task);
-                        break;
-                    case TaskType::Condense:
-                        Memory_RunCondensation(task.memoryBotGuid, task.memoryPrompt);
-                        break;
-                    case TaskType::Relationship:
-                        Memory_RunRelationshipUpdate(task.memoryBotGuid, task.memoryOtherGuid,
-                                                     task.memoryOtherName, task.memoryPrompt);
-                        break;
                     case TaskType::Job:
                         if (task.job)
                             task.job();
@@ -833,12 +795,6 @@ namespace
         if (c.request.targetGuid)
         {
             Player* addressee = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
-            // Two bots talking: each may pass on something it went through with someone (rumours spread).
-            if (addressee && addressee != bot && OllamaIsBotPlayer(addressee))
-            {
-                Memory_ShareRumour(addressee, bot);
-                Memory_ShareRumour(bot, addressee);
-            }
             if (OllamaIsRealPlayer(addressee) && !c.request.voice)
             {
                 Governor_NoteConversation(botGuid, ObjectGuid(c.request.targetGuid),
@@ -855,22 +811,6 @@ namespace
         {
             AppendBotConversation(c.request.botGuid, c.request.targetGuid,
                                   c.request.originMessage, remembered);
-
-            // Counts name mentions and, past a threshold, queues a
-            // condensation or relationship revision. World thread.
-            Player* target = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.targetGuid));
-            if (target && OllamaIsRealPlayer(target))
-                Bond_NoteTalk(bot, target);
-            Memory_NoteExchange(c.request.botGuid, c.request.targetGuid,
-                                target ? target->GetName() : std::string(),
-                                c.request.originMessage, remembered);
-        }
-
-        if (c.request.updateSentiment && c.request.targetGuid &&
-            !c.request.originMessage.empty())
-        {
-            OllamaDispatch_SubmitSentiment(c.request.botGuid, c.request.targetGuid,
-                                           c.request.originMessage);
         }
 
         if (g_DebugEnabled)
@@ -999,40 +939,6 @@ void OllamaDispatch_ForgetConversations(uint64_t guid)
     }
 }
 
-void OllamaDispatch_SubmitSentiment(uint64_t botGuid, uint64_t playerGuid,
-                                    const std::string& message)
-{
-    if (!g_EnableSentimentTracking || message.empty())
-        return;
-
-    // Built here, on the world thread: the template is config state that
-    // reload rewrites, so a worker must never read it.
-    std::string prompt = BuildSentimentPrompt(message);
-    if (prompt.empty())
-        return;
-
-    Task task;
-    task.type                = TaskType::Sentiment;
-    task.sentimentBotGuid    = botGuid;
-    task.sentimentPlayerGuid = playerGuid;
-    task.sentimentMessage    = message;
-    task.sentimentPrompt     = std::move(prompt);
-
-    {
-        std::lock_guard<std::mutex> lock(g_queueMutex);
-        if (!g_running)
-            return;
-
-        // Sentiment is best-effort; never let it crowd out actual chat.
-        if (g_MaxQueueDepth > 0 && g_queue.size() >= g_MaxQueueDepth / 2)
-            return;
-
-        g_queue.push_back(std::move(task));
-    }
-
-    g_queueCv.notify_one();
-}
-
 void OllamaDispatch_Update(uint32_t /*diff*/)
 {
     const auto now = Clock::now();
@@ -1132,38 +1038,6 @@ bool OllamaDispatch_SubmitJob(std::function<void()> job)
         return false;
     g_queueCv.notify_one();
     return true;
-}
-
-void OllamaDispatch_SubmitCondensation(uint64_t botGuid, const std::string& prompt)
-{
-    if (botGuid == 0 || prompt.empty())
-        return;
-
-    Task task;
-    task.type          = TaskType::Condense;
-    task.memoryBotGuid = botGuid;
-    task.memoryPrompt  = prompt;
-
-    if (SubmitBackground(std::move(task)))
-        g_queueCv.notify_one();
-}
-
-void OllamaDispatch_SubmitRelationship(uint64_t botGuid, uint64_t otherGuid,
-                                       const std::string& otherName,
-                                       const std::string& prompt)
-{
-    if (botGuid == 0 || otherGuid == 0 || prompt.empty())
-        return;
-
-    Task task;
-    task.type            = TaskType::Relationship;
-    task.memoryBotGuid   = botGuid;
-    task.memoryOtherGuid = otherGuid;
-    task.memoryOtherName = otherName;
-    task.memoryPrompt    = prompt;
-
-    if (SubmitBackground(std::move(task)))
-        g_queueCv.notify_one();
 }
 
 OllamaDispatchStats OllamaDispatch_GetStats()

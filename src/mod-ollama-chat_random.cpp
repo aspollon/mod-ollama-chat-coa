@@ -3,7 +3,6 @@
 #include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat_coa.h"
 #include "mod-ollama-chat_lore.h"
-#include "mod-ollama-chat_bonds.h"
 #include "mod-ollama-chat_presence.h"
 #include "mod-ollama-chat_config.h"
 #include "mod-ollama-chat_dispatch.h"
@@ -11,8 +10,6 @@
 #include "mod-ollama-chat_handler.h"
 #include "mod-ollama-chat_personality.h"
 #include "mod-ollama-chat_roleplay.h"
-#include "mod-ollama-chat_sentiment.h"
-#include "mod-ollama-chat_memory.h"
 #include "mod-ollama-chat_topics.h"
 #include "mod-ollama-chat_world.h"
 #include "mod-ollama-chat_expression.h"
@@ -202,10 +199,7 @@ namespace
 
         prompt += std::string(person->GetName()) + ", a " + Coa_RaceName(person->getRace()) + " " +
                   botAI->GetChatHelper()->FormatClass(person->getClass()) + ", is near you. ";
-        prompt += GetSentimentPromptAddition(bot, person);
-        prompt += Bond_BuildPromptSection(bot, person);
         prompt += Lore_BuildSection(bot, person, std::string());
-        prompt += Memory_RecallMarker(bot, person, std::string());
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += " Speak to " + std::string(person->GetName()) + " first, by name, the way someone in your situation "
                   "would: a question, a request for help, a warning, an offer, a remark about what you are doing or "
@@ -272,7 +266,6 @@ namespace
 
         prompt += " " + OllamaDescribeSituation(bot, nullptr);
         prompt += Lore_BuildSection(bot, nullptr, environmentInfo);
-        prompt += Memory_RecallMarker(bot, nullptr, environmentInfo);
         prompt += Roleplay_BuildVoicePrompt(bot);
         prompt += Expression_BuildGesturePrompt();
 
@@ -309,8 +302,6 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         maintenanceTimer = 30000;
         Governor_Update();
         Topics_Update();
-        Bond_Update();
-        Memory_Update();
     }
     else
     {
@@ -324,27 +315,6 @@ void OllamaBotRandomChatter::OnUpdate(uint32 diff)
         {
             SaveBotConversationHistoryToDB();
             g_LastHistorySaveTime = now;
-        }
-    }
-
-    if (g_MemoryEnable && g_MemorySaveInterval > 0)
-    {
-        const time_t now = time(nullptr);
-        if (difftime(now, g_LastMemorySaveTime) >= g_MemorySaveInterval * 60)
-        {
-            Memory_SaveAll();
-            Bond_SaveAll();
-            g_LastMemorySaveTime = now;
-        }
-    }
-
-    if (g_EnableSentimentTracking && g_SentimentSaveInterval > 0)
-    {
-        const time_t now = time(nullptr);
-        if (difftime(now, g_LastSentimentSaveTime) >= g_SentimentSaveInterval * 60)
-        {
-            SaveBotPlayerSentimentsToDB();
-            g_LastSentimentSaveTime = now;
         }
     }
 

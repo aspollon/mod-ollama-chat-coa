@@ -318,7 +318,7 @@ namespace
         static const std::vector<std::string> markers = {
             "your personality", "make sure you respond", "reply naturally", "under 15 words",
             "stay in character", "never break character", "do not break character", "you are a person living",
-            "never mention servers", "things you remember", "relationship sentiment", "authentic wow tone",
+            "never mention servers", "authentic wow tone",
             "never act like a narrator", "these instructions", "the instructions", "as an ai", "language model",
             "respond using", "use real wow slang", "no quotes, markdown", "your reply:", "gesture tag",
         };
