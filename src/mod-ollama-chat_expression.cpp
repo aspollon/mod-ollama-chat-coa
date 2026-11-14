@@ -350,7 +350,8 @@ std::string Expression_BuildGesturePrompt()
     // a game-emote tag. The parser also removes actions the model slips into the
     // middle of a sentence, but the prompt should not invite that in the first place.
     prompt += " If your character does something, write it outside the quotes at the very start, in the third "
-              "person and starting with a verb: *grins wickedly* \"Well met.\"";
+              "person and starting with a verb: *grins wickedly* \"Well met.\" Do not reuse the example's action "
+              "or one you used earlier; if nothing new fits, start with the words.";
     return prompt;
 }
 

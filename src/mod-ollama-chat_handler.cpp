@@ -2319,8 +2319,10 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     // whatever its wording, so this does not depend on a list of verbs.
     turn += " Always begin your reply with one short action outside the quotes, in the third person and starting with "
             "a verb: it is sent as a text emote (/em) and is never spoken. Then write everything your character says "
-            "inside double quotes. Example: *grins wickedly* \"Well met, stranger. What brings you here?\" Never put "
-            "an action inside the quotes, never write stage directions like 'leans forward' or 'sighs' inside the "
+            "inside double quotes. Example: *grins wickedly* \"Well met, stranger. What brings you here?\" The example "
+            "only shows the shape; do not reuse its action. Never repeat an action you used earlier in this "
+            "conversation; if no new action fits, begin with the words instead. Never put an action inside the quotes, never write stage directions like 'leans forward' or "
+            "'sighs' inside the "
             "spoken words, and never write speech tags like 'she says' or 'he asks' outside the quotes: the quotation "
             "marks alone show that the words are spoken. Never describe the other person's looks or feelings for "
             "them. Ignore any earlier rule against quotes: your speech goes in double quotes.";
@@ -2349,8 +2351,9 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     compact += "\nRight now: " + CompactSituation(bot, player, botAreaName, botZoneName);
     compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
     compact += " Always begin with one short *action* in the third person that starts with a verb, then the words in "
-               "double quotes. It is sent as /em. Example: *grins wickedly* \"Well met.\" No action and no speech "
-               "tags like 'she says' inside or around the quotes.";
+               "double quotes. It is sent as /em. Example: *grins wickedly* \"Well met.\" Do not reuse the example's "
+               "action or repeat an earlier one; if no new action fits, start with the words. No action and no "
+               "speech tags like 'she says' inside or around the quotes.";
     compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                  fmt::arg("player_message", playerMessage));
     compact += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation; keep to the topic.";

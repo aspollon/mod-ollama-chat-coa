@@ -97,6 +97,8 @@ namespace
     // The last line each bot said to someone directly (bot guid -> text), for the repetition check below.
     std::mutex g_lastDirectMutex;
     std::unordered_map<uint64_t, std::string> g_lastDirect;
+    // The last few actions each bot sent, so a model that latches onto one gesture cannot repeat it every line.
+    std::unordered_map<uint64_t, std::deque<std::string>> g_recentActions;
 
     // ---------------------------------------------------------------------
     // Conversation contexts
@@ -756,10 +758,43 @@ namespace
         bool sent = false;
         if (!c.action.empty() && !g_DisableForSayYell && AnyoneInRange(bot, g_SayDistance))
         {
-            // The client prints "<name>" and then the text; without the leading
-            // space the emote reads "Tanna Amberbladestands there."
-            bot->TextEmote(" " + c.action);
-            sent = true;
+            // Small models latch onto the example action and repeat it before every
+            // line. Keep the last few per bot and drop a repeat; the spoken words
+            // still go out, and the history no longer teaches the same gesture.
+            bool repeatedAction = false;
+            {
+                std::lock_guard<std::mutex> lock(g_lastDirectMutex);
+                auto& recent = g_recentActions[botGuid];
+                for (const std::string& prior : recent)
+                {
+                    if (Governor_Similarity(c.action, prior) >= 0.8f)
+                    {
+                        repeatedAction = true;
+                        break;
+                    }
+                }
+                if (!repeatedAction)
+                {
+                    recent.push_back(c.action);
+                    while (recent.size() > 3)
+                        recent.pop_front();
+                }
+            }
+
+            if (!repeatedAction)
+            {
+                // The client prints "<name>" and then the text; without the leading
+                // space the emote reads "Tanna Amberbladestands there."
+                bot->TextEmote(" " + c.action);
+                sent = true;
+            }
+            else
+            {
+                if (g_DebugEnabled)
+                    LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} repeated its action '{}'; emote suppressed.",
+                             bot->GetName(), c.action);
+                c.action.clear();
+            }
         }
         if (!c.text.empty() && c.request.voice && c.request.source == SRC_WHISPER_LOCAL)
         {
@@ -966,6 +1001,12 @@ void OllamaDispatch_ForgetConversations(uint64_t guid)
 {
     if (guid == 0)
         return;
+
+    {
+        std::lock_guard<std::mutex> lock(g_lastDirectMutex);
+        g_lastDirect.erase(guid);
+        g_recentActions.erase(guid);
+    }
 
     std::lock_guard<std::mutex> lock(g_conversationMutex);
     for (auto it = g_conversations.begin(); it != g_conversations.end(); )
