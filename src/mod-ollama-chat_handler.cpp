@@ -2372,6 +2372,10 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     // CPU-only server.
     std::string compact;
     compact += "\nRight now: " + CompactSituation(bot, player, botAreaName, botZoneName);
+    // Who is who, every turn: a long talk otherwise drifts to whatever race the model guesses (a Tauren called an orc).
+    compact += " You are a " + botRace + " " + botClass + ". " + playerName + " is a " +
+               (playerGenderByte == 0 ? "male " : "female ") + playerRace + " " + playerClass + " of the " +
+               playerFaction + ". Speak the way your people and your calling speak, as your background above says.";
     compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
     compact += " Words in double quotes. An *action* first only when your character really does something new; most "
                "lines need none, and never repeat an earlier one. No action and no speech tags like 'she says' inside "

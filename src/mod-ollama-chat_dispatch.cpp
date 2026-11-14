@@ -184,8 +184,10 @@ namespace
         // a conversation is worse than rebuilding it from the bounded history.
         if (cfg.numCtx > 0)
         {
-            const size_t estimate = deltaChars / 3 + 64;
-            if (c.tokens.size() + estimate >= cfg.numCtx)
+            // The reply must fit too: past num_ctx Ollama shifts out the oldest tokens, which are the sheets, the
+            // races and the lore at the start. Past three quarters the talk is rebuilt so the start is read afresh.
+            const size_t estimate = deltaChars / 3 + 64 + cfg.numPredict + 64;
+            if (c.tokens.size() + estimate >= cfg.numCtx || c.tokens.size() * 4 >= size_t(cfg.numCtx) * 3)
             {
                 g_conversations.erase(it);
                 return false;
