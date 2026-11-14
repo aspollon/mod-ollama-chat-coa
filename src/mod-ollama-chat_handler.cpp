@@ -2032,6 +2032,16 @@ static std::string RollReplyLength(const std::string& playerMessage)
     return " Answer in one short sentence, the way people talk in passing.";
 }
 
+// Whether this reply opens with an action: a firm ask on GestureChance percent of lines, so RP gets its gestures
+// without an action before every line (a soft "only when it fits" made small models drop them altogether).
+static std::string RollAction()
+{
+    if (g_GestureChance > 0 && static_cast<int>(urand(1, 100)) <= g_GestureChance)
+        return " Begin this reply with one short action between asterisks that fits this moment: a gesture, a look, "
+               "something your character does with their hands or body, made up for this moment.";
+    return " No action this time, only the words in double quotes.";
+}
+
 std::string OllamaDescribeSituation(Player* bot, Player* player)
 {
     std::vector<std::string> parts;
@@ -2338,11 +2348,9 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     // Quote the speech: everything outside the quotes is treated as an action,
     // whatever its wording, so this does not depend on a list of verbs.
     // No example action: small models copy any example into every line (the old one, grins wickedly, flooded chat).
-    turn += " Write everything your character says inside double quotes. Only when your character really does "
-            "something that fits this moment, put one short action first, between asterisks, in the third person and "
-            "starting with a verb, made up for this moment; it is sent as a text emote (/em) and is never spoken. Most "
-            "lines need no action. Never repeat an action you used earlier in this conversation. Never put an action "
-            "inside the quotes, never write stage directions like 'leans forward' or 'sighs' inside the spoken words, "
+    turn += " Write everything your character says inside double quotes. An action goes first, between asterisks, "
+            "in the third person and starting with a verb; it is sent as a text emote (/em) and is never spoken. "
+            "Never repeat an action you used earlier in this conversation. Never put an action inside the quotes, never write stage directions like 'leans forward' or 'sighs' inside the spoken words, "
             "and never write speech tags like 'she says' or 'he asks' outside the quotes: the quotation marks alone "
             "show that the words are spoken. Finish every sentence you begin; do not trail off with '...'. Never "
             "describe the other person's looks or feelings for them. Ignore any earlier rule against quotes: your "
@@ -2360,7 +2368,7 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
             "about " + playerName + " colour your tone, but not every line has to be about you or about " + playerName +
             "'s past; bring those up only when the talk turns to them. If " + playerName + " calls you by your name, "
             "race, class or a title, they mean you. Keep to the topic and do not greet again if you are already talking.";
-    const std::string length = RollReplyLength(playerMessage);
+    const std::string length = RollReplyLength(playerMessage) + RollAction();
     turn += length;
 
     parts.turn = std::move(turn);
@@ -2377,8 +2385,7 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
                (playerGenderByte == 0 ? "male " : "female ") + playerRace + " " + playerClass + " of the " +
                playerFaction + ". Speak the way your people and your calling speak, as your background above says.";
     compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
-    compact += " Words in double quotes. An *action* first only when your character really does something new; most "
-               "lines need none, and never repeat an earlier one. No action and no speech tags like 'she says' inside "
+    compact += " Words in double quotes. An *action* goes first, never one used earlier. No action and no speech tags like 'she says' inside "
                "or around the quotes. Finish every sentence you begin; do not trail off with '...'.";
     compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                  fmt::arg("player_message", playerMessage));
