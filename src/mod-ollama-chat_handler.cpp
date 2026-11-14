@@ -2315,13 +2315,14 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
         turn += GenerateBotGameStateSnapshot(bot);
 
     // Anything the bot does is a text emote (/em ...), never words in the speech.
-    // The parser also moves actions the model slips into the middle; the prompt
-    // should not invite them in the first place.
-    turn += " Anything your character does goes in one text emote at the very start, between single asterisks and "
-            "in the third person, followed by a space: *grins wickedly* Well met. After that, write only the words "
-            "you say. Never put an action in the middle or at the end of a sentence, and never write stage "
-            "directions like 'leans forward' or 'sighs' inside your speech. Never describe the other person's "
-            "looks or feelings for them.";
+    // Quote the speech: everything outside the quotes is treated as an action,
+    // whatever its wording, so this does not depend on a list of verbs.
+    turn += " Write everything your character says inside double quotes. Write anything your character does outside "
+            "the quotes, in the third person, as a text emote: it is sent as /em and is never spoken. Example: "
+            "*grins wickedly* \"Well met, stranger. What brings you here?\" Never put an action inside the quotes, "
+            "never write stage directions like 'leans forward' or 'sighs' inside the spoken words, and never describe "
+            "the other person's looks or feelings for them. Ignore any earlier rule against quotes: your speech goes "
+            "in double quotes.";
 
     // The new line comes last: small models answer what they read last, and a message
     // buried in the middle of the prompt is how a conversation loses its thread.
@@ -2346,8 +2347,9 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     std::string compact;
     compact += "\nRight now: " + CompactSituation(bot, player, botAreaName, botZoneName);
     compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
-    compact += " Anything your character does goes in one short *action* at the very start, followed by a space; "
-               "no action anywhere else.";
+    compact += " Everything you say goes inside double quotes; anything your character does goes outside the quotes "
+               "as a short *action* and is sent as /em. Example: *grins wickedly* \"Well met.\" No action inside "
+               "the quotes.";
     compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                  fmt::arg("player_message", playerMessage));
     compact += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation; keep to the topic.";

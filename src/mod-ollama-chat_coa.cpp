@@ -830,6 +830,173 @@ namespace
         }
         return TrimCopy(clean);
     }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Quote-based reply format. Everything the character says is inside double quotes; everything outside them is
+    // something the character does and goes out as an emote. This is independent of the wording of the action, which
+    // is what makes it reliable: the model does not have to remember a list of verbs.
+    // ------------------------------------------------------------------------------------------------------------
+
+    std::string NormalizeQuotes(std::string s)
+    {
+        const std::pair<const char*, const char*> replacements[] = {
+            { "\xE2\x80\x9C", "\"" }, { "\xE2\x80\x9D", "\"" }, { "\xE2\x80\x9E", "\"" },
+            { "\xC2\xAB", "\"" },     { "\xC2\xBB", "\"" },
+        };
+        for (const auto& [from, to] : replacements)
+        {
+            const std::string needle(from);
+            for (size_t p; (p = s.find(needle)) != std::string::npos; )
+                s.replace(p, needle.size(), to);
+        }
+        return s;
+    }
+
+    bool UnquotedHasAction(const std::string& text)
+    {
+        if (text.find('*') != std::string::npos || text.find('(') != std::string::npos)
+            return true;
+
+        for (size_t i = 0; i < text.size(); )
+        {
+            if (!IsWordByte(static_cast<unsigned char>(text[i])))
+            {
+                ++i;
+                continue;
+            }
+            size_t j = i;
+            while (j < text.size() && IsWordByte(static_cast<unsigned char>(text[j])))
+                ++j;
+            if (IsStageVerb(Lower(text.substr(i, j - i))))
+                return true;
+            i = j;
+        }
+        return false;
+    }
+
+    bool StartsWithStage(const std::string& text, const std::string& botName)
+    {
+        std::string t = TrimCopy(text);
+        for (const std::string& lead : { botName, std::string("he"), std::string("she"), std::string("they"),
+                                         std::string("er"), std::string("sie"), std::string("es") })
+        {
+            if (!lead.empty() && StartsWithWordCI(t, lead))
+            {
+                t = TrimCopy(t.substr(lead.size()));
+                break;
+            }
+        }
+
+        size_t end = 0;
+        while (end < t.size() && IsWordByte(static_cast<unsigned char>(t[end])))
+            ++end;
+        return end > 0 && IsStageVerb(Lower(t.substr(0, end)));
+    }
+
+    bool TakeQuotedReply(const std::string& raw, const std::string& botName,
+                         std::string& speech, std::string& action)
+    {
+        const std::string s = NormalizeQuotes(raw);
+
+        std::vector<std::pair<size_t, size_t>> spans;
+        bool inQuote = false;
+        size_t start = 0;
+        for (size_t i = 0; i < s.size(); ++i)
+        {
+            if (s[i] != '"')
+                continue;
+            if (!inQuote)
+            {
+                inQuote = true;
+                start = i + 1;
+            }
+            else
+            {
+                spans.emplace_back(start, i);
+                inQuote = false;
+            }
+        }
+        if (spans.empty())
+            return false;
+        if (inQuote)
+            spans.emplace_back(start, s.size());
+
+        std::string unquoted;
+        size_t pos = 0;
+        for (const auto& [a, b] : spans)
+        {
+            if (a > pos)
+                unquoted += s.substr(pos, a - 1 - pos);
+            pos = b + 1;
+        }
+        if (pos < s.size())
+            unquoted += s.substr(pos);
+
+        std::string said;
+        for (const auto& [a, b] : spans)
+        {
+            std::string part = TrimCopy(s.substr(a, b - a));
+            if (part.find_first_not_of(" \t\r\n.,;:!?-") == std::string::npos)
+                continue;
+            if (!said.empty())
+                said += " ";
+            said += part;
+        }
+        if (said.empty())
+            return false;
+
+        const std::string unq = TrimCopy(unquoted);
+        const bool whole = unq.find_first_not_of(" \t\r\n.,;:!?-") == std::string::npos;
+        const bool actionOnly = unq.empty() ||
+            (unq.front() == '*' && unq.back() == '*') ||
+            (unq.front() == '(' && unq.back() == ')') ||
+            StartsWithStage(unq, botName);
+        const bool actionLike = actionOnly || UnquotedHasAction(unq);
+
+        size_t quotedChars = 0;
+        for (const auto& [a, b] : spans)
+            quotedChars += b - a;
+
+        // A quoted name inside an otherwise spoken sentence ("I am \"Johan\".") is not the format;
+        // only split when the quotes carry the speech or the rest is clearly an action.
+        if (!whole && !actionOnly && !actionLike)
+            return false;
+        if (!whole && !actionOnly && quotedChars < 8)
+            return false;
+
+        std::string act = unquoted;
+        for (char& c : act)
+            if (c == '*' || c == '_' || c == '(' || c == ')')
+                c = ' ';
+
+        std::string clean;
+        clean.reserve(act.size());
+        bool space = false;
+        for (char c : act)
+        {
+            if (std::isspace(static_cast<unsigned char>(c)))
+            {
+                if (!clean.empty())
+                    space = true;
+                continue;
+            }
+            if (space)
+            {
+                clean += ' ';
+                space = false;
+            }
+            clean += c;
+        }
+        act = TrimCopy(clean);
+        while (!act.empty() && (act.front() == ',' || act.front() == '.' || act.front() == ';' ||
+                                act.front() == ':' || act.front() == '-'))
+            act.erase(act.begin());
+        act = TrimCopy(act);
+
+        speech = said;
+        action = act;
+        return true;
+    }
 }
 
 std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
@@ -842,6 +1009,20 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
     }
 
     std::string actions;
+
+    std::string quotedSpeech, quotedAction;
+    if (TakeQuotedReply(reply, botName, quotedSpeech, quotedAction))
+    {
+        reply = quotedSpeech;
+        if (!quotedAction.empty())
+            actions = ThirdPerson(quotedAction, botName);
+        // An action the model still put inside the quotes is a stage direction too;
+        // take it out of the speech, but leave emphasis and quoted dialogue alone.
+        reply = TakeMidTextActions(reply, actions, botName);
+        reply = TrimCopy(reply);
+        return actions;
+    }
+
     auto take = [&](size_t start, size_t end, size_t innerStart, size_t innerEnd,
                     bool allowSingle = false, bool midText = false) -> bool
     {

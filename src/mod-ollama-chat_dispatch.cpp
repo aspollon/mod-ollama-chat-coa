@@ -778,9 +778,12 @@ namespace
             return;
         }
 
-        // What the bot did and said, for its memory of the conversation.
-        const std::string remembered = c.action.empty() ? c.text
-                                     : "*" + c.action + "*" + (c.text.empty() ? "" : " " + c.text);
+        // What the bot did and said, for its memory of the conversation. The
+        // speech is quoted so the history shows the same format the prompt asks
+        // for: actions outside the quotes, words inside them.
+        const std::string remembered = c.action.empty()
+            ? "\"" + c.text + "\""
+            : "*" + c.action + "*" + (c.text.empty() ? "" : " \"" + c.text + "\"");
 
         if (!c.text.empty())
             Governor_RecordUtterance(botGuid, c.request.scopeKey, c.text);
