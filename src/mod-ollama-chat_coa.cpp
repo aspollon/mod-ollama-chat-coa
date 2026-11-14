@@ -586,6 +586,46 @@ namespace
             }
             action = verb + swapped;
         }
+        else if (StartsWithWordCI(action, "you"))
+        {
+            // The model often narrates at the reader: "You stand there, your clothes ...".
+            // As an emote it is about the bot: "stands there, their clothes ...".
+            action = TrimCopy(action.substr(3));
+            size_t end = action.find(' ');
+            std::string verb = action.substr(0, end);
+            std::string rest = end == std::string::npos ? "" : action.substr(end);
+            const std::string lv = Lower(verb);
+            if (lv == "are") verb = "is";
+            else if (lv == "were") verb = "was";
+            else if (lv == "have") verb = "has";
+            else if (lv == "do") verb = "does";
+            else if (lv == "can" || lv == "could" || lv == "will" || lv == "would" || lv == "shall" ||
+                     lv == "should" || lv == "may" || lv == "might" || lv == "must")
+            {
+                // Modal verbs keep their form.
+            }
+            else if (!verb.empty() && verb.back() != 's')
+            {
+                const char last = verb.back();
+                if (verb.size() > 1 && (last == 'h' || last == 'x' || last == 'o')) verb += "es";
+                else if (verb.size() > 1 && last == 'y' && !strchr("aeiou", verb[verb.size() - 2])) verb = verb.substr(0, verb.size() - 1) + "ies";
+                else verb += "s";
+            }
+            std::string swapped;
+            for (size_t i = 0; i < rest.size();)
+            {
+                if (!IsWordByte(static_cast<unsigned char>(rest[i]))) { swapped += rest[i++]; continue; }
+                size_t j = i;
+                while (j < rest.size() && IsWordByte(static_cast<unsigned char>(rest[j])))
+                    ++j;
+                std::string w = rest.substr(i, j - i);
+                const std::string lw = Lower(w);
+                swapped += lw == "your" ? "their" : lw == "you" ? "them" : lw == "yourself" ? "themselves"
+                         : lw == "yours" ? "theirs" : w;
+                i = j;
+            }
+            action = verb + swapped;
+        }
         else if (StartsWithWordCI(action, "ich"))
         {
             // German: "Ich grinse dich an" -> "grinst dich an"
@@ -643,6 +683,12 @@ namespace
             "leans", "gestures", "sighs", "glances", "looks", "smiles", "grins", "nods", "shrugs",
             "chuckles", "laughs", "pauses", "tilts", "raises", "crosses", "shakes", "steps", "turns",
             "stands", "sits", "folds", "rubs", "scratches", "frowns", "blinks", "exhales", "mutters",
+            "waves",
+            // Small models often write the action in the past tense.
+            "leaned", "gestured", "sighed", "glanced", "looked", "smiled", "grinned", "nodded",
+            "shrugged", "chuckled", "laughed", "paused", "tilted", "raised", "crossed", "shook",
+            "stepped", "turned", "stood", "sat", "folded", "rubbed", "scratched", "frowned",
+            "blinked", "exhaled", "muttered", "waved",
             // German stage directions, third person and the bare stem the small models use.
             "rutscht", "rutsch", "kichert", "kicher", "seufzt", "seufz", "lächelt", "lächel",
             "grinst", "nickt", "nick", "zuckt", "zuck", "lehnt", "lehn", "schaut", "schau",
@@ -893,6 +939,59 @@ namespace
         return end > 0 && IsStageVerb(Lower(t.substr(0, end)));
     }
 
+    bool StartsWithPerson(const std::string& text, const std::string& botName)
+    {
+        const std::string t = TrimCopy(text);
+        for (const std::string& lead : { botName, std::string("you"), std::string("he"), std::string("she"),
+                                         std::string("they"), std::string("er"), std::string("sie"),
+                                         std::string("es") })
+        {
+            if (!lead.empty() && StartsWithWordCI(t, lead))
+                return true;
+        }
+        return false;
+    }
+
+    bool IsSpeechVerb(const std::string& word)
+    {
+        static const std::vector<std::string> verbs = {
+            "say", "says", "said", "ask", "asks", "asked", "reply", "replies", "replied",
+            "answer", "answers", "answered", "whisper", "whispers", "whispered",
+            "shout", "shouts", "shouted", "call", "calls", "called", "murmur", "murmurs",
+            "murmured", "mutter", "mutters", "muttered", "continue", "continues",
+            "continued", "add", "adds", "added", "explain", "explains", "explained",
+            "tell", "tells", "told", "exclaim", "exclaims", "exclaimed", "respond",
+            "responds", "responded", "state", "states", "stated", "cry", "cries", "cried",
+            "begin", "begins", "began", "speak", "speaks", "spoke"
+        };
+        return std::find(verbs.begin(), verbs.end(), word) != verbs.end();
+    }
+
+    // "she says", "he asked", "the innkeeper replies": words that mark who speaks, not an action.
+    bool LooksLikeSpeechTag(const std::string& text)
+    {
+        const std::string t = TrimCopy(text);
+        if (t.empty() || UnquotedHasAction(t))
+            return false;
+
+        bool verb = false;
+        for (size_t i = 0; i < t.size();)
+        {
+            if (!IsWordByte(static_cast<unsigned char>(t[i])))
+            {
+                ++i;
+                continue;
+            }
+            size_t j = i;
+            while (j < t.size() && IsWordByte(static_cast<unsigned char>(t[j])))
+                ++j;
+            if (IsSpeechVerb(Lower(t.substr(i, j - i))))
+                verb = true;
+            i = j;
+        }
+        return verb;
+    }
+
     bool TakeQuotedReply(const std::string& raw, const std::string& botName,
                          std::string& speech, std::string& action)
     {
@@ -939,7 +1038,16 @@ namespace
             if (part.find_first_not_of(" \t\r\n.,;:!?-") == std::string::npos)
                 continue;
             if (!said.empty())
+            {
+                // A speech tag between two quoted sentences leaves a comma behind:
+                // "I am fine," she says, "But ..." -> "I am fine. But ..."
+                if ((said.back() == ',' || said.back() == ';') && !part.empty() &&
+                    std::isupper(static_cast<unsigned char>(part.front())))
+                {
+                    said.back() = '.';
+                }
                 said += " ";
+            }
             said += part;
         }
         if (said.empty())
@@ -953,18 +1061,29 @@ namespace
             StartsWithStage(unq, botName);
         const bool actionLike = actionOnly || UnquotedHasAction(unq);
 
-        size_t quotedChars = 0;
-        for (const auto& [a, b] : spans)
-            quotedChars += b - a;
+        const std::string prefix = TrimCopy(s.substr(0, spans.front().first - 1));
+        const std::string suffix = TrimCopy(s.substr(std::min(spans.back().second + 1, s.size())));
+        auto hasWords = [](const std::string& t) {
+            return t.find_first_not_of(" \t\r\n.,;:!?-") != std::string::npos;
+        };
+        const bool prefixText = hasWords(prefix);
+        const bool suffixText = hasWords(suffix);
+        const bool sidesAction = UnquotedHasAction(prefix) || UnquotedHasAction(suffix);
 
-        // A quoted name inside an otherwise spoken sentence ("I am \"Johan\".") is not the format;
-        // only split when the quotes carry the speech or the rest is clearly an action.
-        if (!whole && !actionOnly && !actionLike)
-            return false;
-        if (!whole && !actionOnly && quotedChars < 8)
+        // The quote format: words inside the quotes, everything outside them is action or a speech tag.
+        // A quoted name inside a spoken sentence ("I am \"Johan\".") has text on both sides and no action;
+        // that is not the format.
+        bool takes = whole || actionOnly || actionLike || (prefixText != suffixText);
+        if (!takes && prefixText && suffixText)
+            takes = sidesAction;
+        if (!takes && !prefixText && !suffixText)
+            takes = LooksLikeSpeechTag(unq) || StartsWithPerson(unq, botName);
+        if (!takes)
             return false;
 
         std::string act = unquoted;
+        if (LooksLikeSpeechTag(act))
+            act.clear();
         for (char& c : act)
             if (c == '*' || c == '_' || c == '(' || c == ')')
                 c = ' ';
