@@ -752,7 +752,9 @@ namespace
         bool sent = false;
         if (!c.action.empty() && !g_DisableForSayYell && AnyoneInRange(bot, g_SayDistance))
         {
-            bot->TextEmote(c.action);
+            // The client prints "<name>" and then the text; without the leading
+            // space the emote reads "Tanna Amberbladestands there."
+            bot->TextEmote(" " + c.action);
             sent = true;
         }
         if (!c.text.empty() && c.request.voice && c.request.source == SRC_WHISPER_LOCAL)

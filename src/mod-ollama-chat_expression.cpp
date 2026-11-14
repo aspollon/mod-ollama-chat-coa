@@ -329,23 +329,29 @@ namespace
 
 std::string Expression_BuildGesturePrompt()
 {
+    // The quote rule is for every generated line, not only when a gesture is
+    // rolled: without it a small model puts the whole speech into *asterisks*
+    // and the reply is delivered as an emote.
+    std::string prompt = " Write everything your character says inside double quotes. Never put an action, a stage "
+                         "direction like 'leans forward' or 'sighs', or a speech tag like 'she says' inside the "
+                         "quotes, and never write your own name in front of the line.";
+
     if (!g_EnableBotEmotes || g_GestureChance <= 0)
-        return "";
+        return prompt;
 
     // Not every line gets the invitation. Offering it on all of them made bots
     // gesture almost constantly, which reads as twitchy rather than alive --
     // and it spends prompt budget on a sentence most replies do not need.
     // urand is inclusive at both ends, so this is 1..100 against the chance.
     if (static_cast<int>(urand(1, 100)) > g_GestureChance)
-        return "";
+        return prompt;
 
     // An action is a text emote (/em ...), not part of the spoken words and not
     // a game-emote tag. The parser also removes actions the model slips into the
     // middle of a sentence, but the prompt should not invite that in the first place.
-    return " If your character does something, write it at the very start between single asterisks, in the third "
-           "person, then a space, then only the words you say: *grins wickedly* Well met. Never put an action in the "
-           "middle or at the end of a sentence, and never write stage directions like 'leans forward' or 'sighs' "
-           "inside your speech. Omit the action if your character does nothing.";
+    prompt += " If your character does something, write it outside the quotes at the very start, in the third "
+              "person and starting with a verb: *grins wickedly* \"Well met.\"";
+    return prompt;
 }
 
 uint32_t LookupTextEmoteId(const std::string& name)

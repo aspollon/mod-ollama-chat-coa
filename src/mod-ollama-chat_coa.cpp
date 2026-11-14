@@ -778,8 +778,8 @@ namespace
                     break;
                 }
                 const char c = reply[k];
-                if ((c == '.' || c == '!' || c == '?') && k + 1 < reply.size() &&
-                    std::isspace(static_cast<unsigned char>(reply[k + 1])))
+                if ((c == '.' || c == '!' || c == '?') &&
+                    (k + 1 == reply.size() || std::isspace(static_cast<unsigned char>(reply[k + 1]))))
                 {
                     end = k + 1;
                     break;
