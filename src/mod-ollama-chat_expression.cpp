@@ -339,35 +339,13 @@ std::string Expression_BuildGesturePrompt()
     if (static_cast<int>(urand(1, 100)) > g_GestureChance)
         return "";
 
-    const auto& samples = GestureSamples();
-
-    // Shuffle the moods, then take one tag from each of the first few, so the
-    // examples are never all the same flavour.
-    std::vector<size_t> order(samples.size());
-    for (size_t i = 0; i < order.size(); ++i)
-        order[i] = i;
-
-    for (size_t i = order.size(); i-- > 1; )
-        std::swap(order[i], order[urand(0, static_cast<uint32>(i))]);
-
-    const size_t take = std::min<size_t>(4, order.size());
-
-    std::string tags;
-    for (size_t i = 0; i < take; ++i)
-    {
-        const auto& bucket = samples[order[i]];
-        const char* name   = bucket[urand(0, static_cast<uint32>(bucket.size() - 1))];
-
-        if (!tags.empty())
-            tags += (i + 1 == take) ? " or " : ", ";
-
-        tags += "[emote:";
-        tags += name;
-        tags += "]";
-    }
-
-    return " You may end your reply with a single gesture tag such as " + tags +
-           " when one genuinely fits -- any common emote name works. Omit it otherwise.";
+    // An action is a text emote (/em ...), not part of the spoken words and not
+    // a game-emote tag. The parser also removes actions the model slips into the
+    // middle of a sentence, but the prompt should not invite that in the first place.
+    return " If your character does something, write it at the very start between single asterisks, in the third "
+           "person, then a space, then only the words you say: *grins wickedly* Well met. Never put an action in the "
+           "middle or at the end of a sentence, and never write stage directions like 'leans forward' or 'sighs' "
+           "inside your speech. Omit the action if your character does nothing.";
 }
 
 uint32_t LookupTextEmoteId(const std::string& name)
@@ -428,7 +406,7 @@ uint32_t ExtractEmoteTag(std::string& response)
 
         const size_t nameStart = start + open.size();
         consider(response.substr(nameStart, close - nameStart));
-        response.erase(start, close - start + 1);
+        response.replace(start, close - start + 1, " ");
     }
 
     // ---- form 2: *waves* -------------------------------------------------
@@ -494,7 +472,10 @@ uint32_t ExtractEmoteTag(std::string& response)
             // fallback and the same debug line as an unrecognised
             // [emote:grunt] -- and does not leak into the chat line.
             consider(inner);
-            response.erase(start, close - start + 1);
+            if (atEdge)
+                response.erase(start, close - start + 1);
+            else
+                response.replace(start, close - start + 1, " ");
         }
         else
         {

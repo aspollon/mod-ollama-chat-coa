@@ -541,6 +541,10 @@ namespace
     std::string ThirdPerson(std::string action, const std::string& botName)
     {
         action = TrimCopy(action);
+        while (!action.empty() && (action.front() == ',' || action.front() == '.' || action.front() == ';' ||
+                                   action.front() == ':' || action.front() == '-'))
+            action.erase(action.begin());
+        action = TrimCopy(action);
         for (const std::string& lead : { botName, std::string("he"), std::string("she"), std::string("er"),
                                           std::string("sie"), std::string("they") })
         {
@@ -594,6 +598,31 @@ namespace
             else if (verb.size() > 2 && verb.back() == 'e') verb = verb.substr(0, verb.size() - 1) + "t";
             action = verb + rest;
         }
+
+        // Bare German stage stems ("rutsch", "kicher") are imperative; the
+        // emote line needs the third person ("rutscht", "kichert").
+        {
+            const size_t end = action.find(' ');
+            const std::string first = Lower(action.substr(0, end));
+            static const std::unordered_map<std::string, std::string> third = {
+                { "rutsch", "rutscht" }, { "kicher", "kichert" }, { "seufz", "seufzt" },
+                { "lächel", "lächelt" }, { "grins", "grinst" }, { "nick", "nickt" },
+                { "zuck", "zuckt" }, { "lehn", "lehnt" }, { "schau", "schaut" },
+                { "blick", "blickt" }, { "dreh", "dreht" }, { "setz", "setzt" },
+                { "steh", "steht" }, { "heb", "hebt" }, { "senk", "senkt" },
+                { "reib", "reibt" }, { "kratz", "kratzt" }, { "runzel", "runzelt" },
+                { "atm", "atmet" }, { "flüster", "flüstert" }, { "lach", "lacht" },
+                { "wein", "weint" }, { "zitter", "zittert" }, { "schüttel", "schüttelt" },
+                { "zieh", "zieht" }, { "leg", "legt" }, { "fass", "fasst" },
+                { "streck", "streckt" }, { "wend", "wendet" }, { "neig", "neigt" },
+                { "beug", "beugt" }, { "spring", "springt" }, { "geh", "geht" },
+                { "komm", "kommt" }, { "bleib", "bleibt" }, { "wart", "wartet" },
+                { "sieh", "sieht" }, { "hör", "hört" },
+            };
+            const auto it = third.find(first);
+            if (it != third.end())
+                action.replace(0, first.size(), it->second);
+        }
         // "You look singed" written as an action is how the model narrates for the reader; as an emote it reads
         // "<Name> looks at you ...". Leave anything else as it is.
         while (!action.empty() && (action.back() == '.' || action.back() == ' '))
@@ -607,6 +636,200 @@ namespace
         }
         return action;
     }
+
+    bool IsStageVerb(const std::string& word)
+    {
+        static const std::vector<std::string> verbs = {
+            "leans", "gestures", "sighs", "glances", "looks", "smiles", "grins", "nods", "shrugs",
+            "chuckles", "laughs", "pauses", "tilts", "raises", "crosses", "shakes", "steps", "turns",
+            "stands", "sits", "folds", "rubs", "scratches", "frowns", "blinks", "exhales", "mutters",
+            // German stage directions, third person and the bare stem the small models use.
+            "rutscht", "rutsch", "kichert", "kicher", "seufzt", "seufz", "lächelt", "lächel",
+            "grinst", "nickt", "nick", "zuckt", "zuck", "lehnt", "lehn", "schaut", "schau",
+            "blickt", "blick", "dreht", "dreh", "setzt", "setz", "steht", "steh", "hebt", "heb",
+            "senkt", "senk", "reibt", "reib", "kratzt", "kratz", "runzelt", "runzel", "atmet", "atm",
+            "flüstert", "flüster", "murmelt", "lacht", "lach", "weint", "wein", "zittert", "zitter",
+            "schüttelt", "schüttel", "zieht", "zieh", "legt", "leg", "fasst", "fass", "streckt",
+            "streck", "wendet", "wend", "neigt", "neig", "beugt", "beug", "springt", "spring",
+            "geht", "geh", "kommt", "komm", "bleibt", "bleib", "wartet", "wart", "sieht", "sieh",
+            "hört", "hör",
+        };
+        return std::find(verbs.begin(), verbs.end(), word) != verbs.end();
+    }
+
+    bool IsStageMarker(const std::string& text)
+    {
+        static const std::vector<std::string> markers = {
+            "eye", "eyes", "arm", "arms", "head", "shoulder", "shoulders", "hand", "hands", "smile",
+            "smirk", "brow", "face", "breath", "table", "wall", "chin", "finger", "fingers", "elbow",
+            "elbows", "feet", "gesture", "curiosity", "weary", "understanding", "voice", "silence",
+        };
+        for (const std::string& marker : markers)
+            if (text.find(marker) != std::string::npos)
+                return true;
+        return false;
+    }
+
+    bool StartsSentence(const std::string& word)
+    {
+        static const std::vector<std::string> starters = {
+            "but", "i", "i'm", "the", "you", "are", "maybe", "perhaps", "well", "yes", "no", "it",
+            "that", "this", "we", "they", "he", "she", "so", "then", "and", "now", "not", "what",
+            "why", "how", "when", "where", "who",
+        };
+        return std::find(starters.begin(), starters.end(), word) != starters.end();
+    }
+
+    // Models that were told to put an action at the start still slip stage directions into the
+    // middle of a sentence ("... leans forward, elbows on the table But ..."). This takes the
+    // clause out of the spoken text and hands it to the emote line instead.
+    std::string TakeMidTextActions(std::string reply, std::string& actions, const std::string& botName)
+    {
+        std::string out;
+        size_t i = 0;
+
+        while (i < reply.size())
+        {
+            if (!IsWordByte(static_cast<unsigned char>(reply[i])))
+            {
+                out += reply[i++];
+                continue;
+            }
+
+            size_t j = i;
+            while (j < reply.size() && IsWordByte(static_cast<unsigned char>(reply[j])))
+                ++j;
+
+            const std::string word = Lower(reply.substr(i, j - i));
+            if (!IsStageVerb(word))
+            {
+                out.append(reply, i, j - i);
+                i = j;
+                continue;
+            }
+
+            size_t p = i;
+            while (p > 0 && std::isspace(static_cast<unsigned char>(reply[p - 1])))
+                --p;
+
+            const bool afterEllipsis = p >= 3 && reply.compare(p - 3, 3, "...") == 0;
+            const bool afterSentence = p > 0 &&
+                (reply[p - 1] == '.' || reply[p - 1] == '!' || reply[p - 1] == '?') &&
+                !(p >= 2 && reply[p - 2] == '.');
+            if (!afterEllipsis && !afterSentence && p != 0)
+            {
+                out.append(reply, i, j - i);
+                i = j;
+                continue;
+            }
+
+            size_t end = std::string::npos;
+            for (size_t k = j; k < reply.size(); ++k)
+            {
+                if (reply.compare(k, 3, "...") == 0)
+                {
+                    end = k;
+                    break;
+                }
+                const char c = reply[k];
+                if ((c == '.' || c == '!' || c == '?') && k + 1 < reply.size() &&
+                    std::isspace(static_cast<unsigned char>(reply[k + 1])))
+                {
+                    end = k + 1;
+                    break;
+                }
+                if (c == ' ' || c == ',')
+                {
+                    size_t s = k;
+                    while (s < reply.size() && (reply[s] == ' ' || reply[s] == ','))
+                        ++s;
+                    size_t e = s;
+                    while (e < reply.size() && IsWordByte(static_cast<unsigned char>(reply[e])))
+                        ++e;
+                    if (e > s && StartsSentence(Lower(reply.substr(s, e - s))))
+                    {
+                        end = s;
+                        break;
+                    }
+                }
+            }
+
+            if (end == std::string::npos)
+            {
+                out.append(reply, i, j - i);
+                i = j;
+                continue;
+            }
+
+            const std::string clause = TrimCopy(reply.substr(i, end - i));
+            const std::string lowerClause = Lower(clause);
+            // A stage verb after an ellipsis is enough; after a full stop it needs a
+            // body-part or manner word, so ordinary speech about a third person survives.
+            if ((!afterEllipsis && !IsStageMarker(lowerClause)) || clause.find('"') != std::string::npos)
+            {
+                out.append(reply, i, j - i);
+                i = j;
+                continue;
+            }
+
+            std::string action = clause;
+            while (!action.empty() && (action.back() == '.' || action.back() == ',' || action.back() == ' '))
+                action.pop_back();
+            if (!action.empty())
+            {
+                if (!actions.empty())
+                    actions += " ";
+                actions += ThirdPerson(action, botName);
+            }
+
+            i = end;
+        }
+
+        for (size_t p; (p = out.find("... ...")) != std::string::npos; )
+            out.replace(p, 7, "... ");
+
+        // Collapse any run of three or more dots to "..." and put a space after
+        // an ellipsis that runs straight into a word ("...maybe" -> "... maybe").
+        for (size_t p = 0; p + 2 < out.size(); )
+        {
+            if (out[p] == '.' && out[p + 1] == '.' && out[p + 2] == '.')
+            {
+                size_t q = p + 3;
+                while (q < out.size() && out[q] == '.')
+                    ++q;
+                out.replace(p, q - p, "...");
+                if (p + 3 < out.size() && IsWordByte(static_cast<unsigned char>(out[p + 3])))
+                    out.insert(p + 3, " ");
+                p += 4;
+            }
+            else
+                ++p;
+        }
+        for (size_t p; (p = out.find(" ,")) != std::string::npos; )
+            out.replace(p, 2, ",");
+        for (size_t p; (p = out.find(" .")) != std::string::npos; )
+            out.replace(p, 2, ".");
+
+        std::string clean;
+        clean.reserve(out.size());
+        bool space = false;
+        for (char c : out)
+        {
+            if (std::isspace(static_cast<unsigned char>(c)))
+            {
+                if (!clean.empty())
+                    space = true;
+                continue;
+            }
+            if (space)
+            {
+                clean += ' ';
+                space = false;
+            }
+            clean += c;
+        }
+        return TrimCopy(clean);
+    }
 }
 
 std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
@@ -619,11 +842,14 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
     }
 
     std::string actions;
-    auto take = [&](size_t start, size_t end, size_t innerStart, size_t innerEnd) -> bool
+    auto take = [&](size_t start, size_t end, size_t innerStart, size_t innerEnd,
+                    bool allowSingle = false, bool midText = false) -> bool
     {
         std::string inner = TrimCopy(reply.substr(innerStart, innerEnd - innerStart));
+        const bool oneWord = inner.find(' ') == std::string::npos;
         // A single word stays: "*waves*" is a game emote with an animation, and "*really*" is emphasis.
-        if (inner.find(' ') == std::string::npos)
+        // A single-word stage verb ("*kichert*") is still an action and is taken when asked for.
+        if (oneWord && !(allowSingle && IsStageVerb(Lower(inner))))
             return false;
         std::string third = ThirdPerson(inner, botName);
         if (third.empty())
@@ -631,7 +857,10 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
         if (!actions.empty())
             actions += " ";
         actions += third;
-        reply.erase(start, end - start);
+        if (midText)
+            reply.replace(start, end - start, " ");
+        else
+            reply.erase(start, end - start);
         return true;
     };
 
@@ -668,6 +897,60 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
         if (!took)
             break;
     }
+
+    // Any other multi-word *action* is an action, not emphasis. Small models put
+    // them in the middle of the sentence ("Well met. *she smiles* ...").
+    for (int guard = 0; guard < 8; ++guard)
+    {
+        bool took = false;
+        for (size_t pos = 0; pos < reply.size(); )
+        {
+            size_t start = reply.find('*', pos);
+            if (start == std::string::npos)
+                break;
+            size_t close = reply.find('*', start + 1);
+            if (close == std::string::npos)
+                break;
+            std::string inner = TrimCopy(reply.substr(start + 1, close - start - 1));
+            const bool multi = inner.find(' ') != std::string::npos;
+            const bool stage = !multi && IsStageVerb(Lower(inner));
+            if ((multi || stage) && take(start, close + 1, start + 1, close, true, true))
+            {
+                took = true;
+                break;
+            }
+            pos = close + 1;
+        }
+        if (!took)
+            break;
+    }
+
+    // Parenthesised multi-word stage directions: "Well met. (she smiles) ..."
+    for (int guard = 0; guard < 4; ++guard)
+    {
+        bool took = false;
+        for (size_t pos = 0; pos < reply.size(); )
+        {
+            size_t start = reply.find('(', pos);
+            if (start == std::string::npos)
+                break;
+            size_t close = reply.find(')', start + 1);
+            if (close == std::string::npos)
+                break;
+            const std::string inner = TrimCopy(reply.substr(start + 1, close - start - 1));
+            if (inner.find(' ') != std::string::npos && IsStageMarker(Lower(inner)) &&
+                take(start, close + 1, start + 1, close, false, true))
+            {
+                took = true;
+                break;
+            }
+            pos = close + 1;
+        }
+        if (!took)
+            break;
+    }
+
+    reply = TakeMidTextActions(reply, actions, botName);
     reply = TrimCopy(reply);
     return actions;
 }

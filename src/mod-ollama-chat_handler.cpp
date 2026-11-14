@@ -2314,13 +2314,14 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     if (g_EnableChatBotSnapshotTemplate)
         turn += GenerateBotGameStateSnapshot(bot);
 
-    // Let the model gesture. The tag is parsed back out and stripped before
-    // the line is spoken, so it never reaches chat as text. Kept in the turn
-    // because the examples are chosen fresh each time.
-    turn += Expression_BuildGesturePrompt();
-    turn += " If you do something while you speak, put it first between asterisks, in the third person and without "
-            "your name, the way an emote reads: *grins wickedly* or *looks at the scorch marks on her sleeve*. "
-            "Never describe the other person's looks or feelings for them.";
+    // Anything the bot does is a text emote (/em ...), never words in the speech.
+    // The parser also moves actions the model slips into the middle; the prompt
+    // should not invite them in the first place.
+    turn += " Anything your character does goes in one text emote at the very start, between single asterisks and "
+            "in the third person, followed by a space: *grins wickedly* Well met. After that, write only the words "
+            "you say. Never put an action in the middle or at the end of a sentence, and never write stage "
+            "directions like 'leans forward' or 'sighs' inside your speech. Never describe the other person's "
+            "looks or feelings for them.";
 
     // The new line comes last: small models answer what they read last, and a message
     // buried in the middle of the prompt is how a conversation loses its thread.
@@ -2345,7 +2346,8 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     std::string compact;
     compact += "\nRight now: " + CompactSituation(bot, player, botAreaName, botZoneName);
     compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
-    compact += " You may add a short *action* or [emote:name] if it fits.";
+    compact += " Anything your character does goes in one short *action* at the very start, followed by a space; "
+               "no action anywhere else.";
     compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                  fmt::arg("player_message", playerMessage));
     compact += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation; keep to the topic.";

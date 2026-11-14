@@ -428,6 +428,10 @@ namespace
             }
         }
 
+        if (g_DebugEnabled && !action.empty())
+            LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} emote '{}' | speech '{}'",
+                     task.request.botName, action, text);
+
         if (text.empty() && action.empty())
         {
             ++g_droppedEmpty;
@@ -695,15 +699,10 @@ namespace
     {
         Completion c = delivered;
 
-        // Where the reply carried an action, it goes out as an emote line ("Klaus grins wickedly.") in say and yell,
-        // where the people around see it. Party, guild, channels and whispers have no emote line, so there the
-        // action stays in front of the words between asterisks.
-        const bool local = c.request.source == SRC_SAY_LOCAL || c.request.source == SRC_YELL_LOCAL;
-        if (!c.action.empty() && !local)
-        {
-            c.text = "*" + c.action + "*" + (c.text.empty() ? "" : " " + c.text);
-            c.action.clear();
-        }
+        // An action always goes out as an emote command (/em ...), never as part
+        // of the spoken line. The words of the reply go to the channel separately.
+        // For say and yell the emote reaches the same people; for party, guild,
+        // channels and whispers it still plays for anyone in say range.
 
         Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(c.request.botGuid));
         if (!bot || !bot->IsInWorld())

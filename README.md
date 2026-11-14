@@ -503,12 +503,16 @@ a log line.
 - **Facing** — the bot turns toward whoever it is answering, just before the
   line lands. Skipped while moving, casting, in combat, in flight, on a
   transport, or teleporting.
-- **Gestures** — the model may end a reply with `[emote:wave]`, `[emote:nod]`
-  and similar. The tag is parsed out and stripped before the line is spoken.
-  `*waves*` and a bare `/wave` are also recognised, because models emit those
-  unprompted. Emotes are played through the same code path the client uses, so
-  nearby players see both the animation and the "Bot waves at You." social text,
-  with the correct per-race and per-gender variant.
+- **Actions and gestures** — what a bot does is a text emote (`/em ...`), never
+  part of the spoken words. The model writes it at the very start between
+  single asterisks, in the third person: `*rutscht auf dem Stuhl hin und her und
+  kichert* Hallo. The module sends that as an emote and says the rest as the
+  chat line. Actions the model slips into the middle of a sentence are removed
+  from the speech and sent as the emote as well. `[emote:wave]`, `*waves*` and
+  a bare `/wave` are still recognised as optional game animations, because
+  models emit those unprompted. Emotes are played through the same code path the
+  client uses, so nearby players see both the animation and the "Bot waves at
+  You." social text, with the correct per-race and per-gender variant.
 - **Emote reactions** — bots react when a player emotes at them, either by
   mirroring (wave gets a wave), countering (flex gets a laugh), or answering in
   words. The first two cost no LLM call.
