@@ -2320,9 +2320,10 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     turn += " Write everything your character says inside double quotes. Write anything your character does outside "
             "the quotes, in the third person, as a text emote: it is sent as /em and is never spoken. Example: "
             "*grins wickedly* \"Well met, stranger. What brings you here?\" Never put an action inside the quotes, "
-            "never write stage directions like 'leans forward' or 'sighs' inside the spoken words, and never describe "
-            "the other person's looks or feelings for them. Ignore any earlier rule against quotes: your speech goes "
-            "in double quotes.";
+            "never write stage directions like 'leans forward' or 'sighs' inside the spoken words, and never write "
+            "speech tags like 'she says' or 'he asks' outside the quotes: the quotation marks alone show that the "
+            "words are spoken. Never describe the other person's looks or feelings for them. Ignore any earlier rule "
+            "against quotes: your speech goes in double quotes.";
 
     // The new line comes last: small models answer what they read last, and a message
     // buried in the middle of the prompt is how a conversation loses its thread.
@@ -2348,8 +2349,8 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     compact += "\nRight now: " + CompactSituation(bot, player, botAreaName, botZoneName);
     compact += Lore_BuildTopicSectionShort(bot, player, playerMessage, 1);
     compact += " Everything you say goes inside double quotes; anything your character does goes outside the quotes "
-               "as a short *action* and is sent as /em. Example: *grins wickedly* \"Well met.\" No action inside "
-               "the quotes.";
+               "as a short *action* and is sent as /em. Example: *grins wickedly* \"Well met.\" No action and no "
+               "speech tags like 'she says' inside or around the quotes.";
     compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                  fmt::arg("player_message", playerMessage));
     compact += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation; keep to the topic.";
