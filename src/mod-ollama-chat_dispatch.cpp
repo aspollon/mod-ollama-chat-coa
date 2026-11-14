@@ -764,7 +764,7 @@ namespace
             bool repeatedAction = false;
             {
                 std::lock_guard<std::mutex> lock(g_lastDirectMutex);
-                auto& recent = g_recentActions[botGuid];
+                auto& recent = g_recentActions[botGuid.GetRawValue()];
                 for (const std::string& prior : recent)
                 {
                     if (Governor_Similarity(c.action, prior) >= 0.8f)
