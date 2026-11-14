@@ -344,8 +344,12 @@ namespace
 
         action = Coa_TakeActionEmote(raw, task.request.botName);
         // The old prompt example; it lives on in contexts and histories, so it is never sent again.
-        if (action.find("grins wickedly") != std::string::npos || action.find("Grins wickedly") != std::string::npos)
-            action.clear();
+        {
+            std::string low = action;
+            std::transform(low.begin(), low.end(), low.begin(), [](unsigned char c) { return std::tolower(c); });
+            if (low.find("wicked") != std::string::npos)
+                action.clear();
+        }
         if (!action.empty())
         {
             action = Roleplay_FilterMetaTerms(action);

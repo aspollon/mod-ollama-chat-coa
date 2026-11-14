@@ -578,6 +578,10 @@ void BotPlayTextEmote(Player* bot, uint32_t textEmoteId, ObjectGuid targetGuid)
     // the animation, the localized broadcast, the correct per-race/gender
     // variant number, achievement criteria and CreatureAI::ReceiveEmote for
     // free -- none of which a hand-built SMSG_TEXT_EMOTE would carry.
+    // The game's /grin text is "grins wickedly", which reads as a tic when bots grin a lot; smile instead.
+    if (textEmoteId == TEXT_EMOTE_GRIN)
+        textEmoteId = TEXT_EMOTE_SMILE;
+
     WorldPacket data(CMSG_TEXT_EMOTE, 4 + 4 + 8);
     data << uint32(textEmoteId);
     data << uint32(0);              // emoteNum; the core recomputes the variant

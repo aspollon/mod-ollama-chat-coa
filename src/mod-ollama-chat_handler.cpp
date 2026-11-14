@@ -2012,6 +2012,26 @@ static bool IsBotEligibleForChatChannelLocal(Player* bot, Player* player, ChatCh
 }
 
 // What the bot is doing right now and where, in a few plain sentences.
+// How long this answer may be: rolled per line so talk mixes short and long, longer when the player asks for a story.
+static std::string RollReplyLength(const std::string& playerMessage)
+{
+    std::string m = playerMessage;
+    std::transform(m.begin(), m.end(), m.begin(), [](unsigned char c) { return std::tolower(c); });
+    static const char* const asksForMore[] = { "erzähl", "erzaehl", "geschichte", "erklär", "erklaer", "berichte",
+                                               "tell me", "story", "explain", "what happened", "more about" };
+    bool wantsMore = false;
+    for (const char* w : asksForMore)
+        if (m.find(w) != std::string::npos)
+            wantsMore = true;
+
+    const uint32 roll = urand(1, 100);
+    if (wantsMore ? roll <= 70 : roll <= 12)
+        return " This time you may tell more: up to five or six sentences, and bring the story to an end.";
+    if (wantsMore || roll <= 45)
+        return " Answer in two or three sentences.";
+    return " Answer in one short sentence, the way people talk in passing.";
+}
+
 std::string OllamaDescribeSituation(Player* bot, Player* player)
 {
     std::vector<std::string> parts;
@@ -2340,6 +2360,8 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
             "about " + playerName + " colour your tone, but not every line has to be about you or about " + playerName +
             "'s past; bring those up only when the talk turns to them. If " + playerName + " calls you by your name, "
             "race, class or a title, they mean you. Keep to the topic and do not greet again if you are already talking.";
+    const std::string length = RollReplyLength(playerMessage);
+    turn += length;
 
     parts.turn = std::move(turn);
 
@@ -2357,6 +2379,7 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     compact += "\n" + SafeFormat(g_ChatHistoryFooterTemplate, fmt::arg("player_name", playerName),
                                  fmt::arg("player_message", playerMessage));
     compact += "\nAnswer " + playerName + " as " + botName + ", continuing the conversation; keep to the topic.";
+    compact += length;
     parts.turnCompact = std::move(compact);
 
     // Debug logging for full prompt including RAG information
