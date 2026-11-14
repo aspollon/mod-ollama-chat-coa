@@ -755,7 +755,12 @@ namespace
             "leans", "gestures", "sighs", "glances", "looks", "smiles", "grins", "nods", "shrugs",
             "chuckles", "laughs", "pauses", "tilts", "raises", "crosses", "shakes", "steps", "turns",
             "stands", "sits", "folds", "rubs", "scratches", "frowns", "blinks", "exhales", "mutters",
-            "waves",
+            "waves", "bows", "grunts", "snorts", "growls", "snarls", "smirks", "winks", "narrows", "clenches",
+            "straightens", "studies", "taps", "grips", "lowers", "lifts", "points", "spits", "huffs", "squints",
+            "hesitates", "regards", "eyes", "strokes", "bares", "rolls", "slams", "clasps", "offers", "gazes",
+            "bowed", "grunted", "snorted", "growled", "snarled", "smirked", "winked", "narrowed", "clenched",
+            "straightened", "studied", "tapped", "gripped", "lowered", "lifted", "pointed", "spat", "huffed",
+            "squinted", "hesitated", "regarded", "eyed", "stroked", "bared", "rolled", "slammed", "clasped", "gazed",
             // Small models often write the action in the past tense.
             "leaned", "gestured", "sighed", "glanced", "looked", "smiled", "grinned", "nodded",
             "shrugged", "chuckled", "laughed", "paused", "tilted", "raised", "crossed", "shook",
@@ -1232,6 +1237,37 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
     }
 
     std::string actions;
+
+    // Speech in single quotes ("Bows his head. 'Then we stand together."): make them double quotes. An opening
+    // quote follows a space or the start and precedes a letter; apostrophes inside words are left alone.
+    if (reply.find('"') == std::string::npos)
+    {
+        size_t open = std::string::npos;
+        for (size_t i = 0; i + 1 < reply.size(); ++i)
+            if (reply[i] == '\'' && (i == 0 || reply[i - 1] == ' ') &&
+                std::isalpha(static_cast<unsigned char>(reply[i + 1])))
+            {
+                open = i;
+                break;
+            }
+        if (open != std::string::npos)
+        {
+            size_t close = std::string::npos;
+            for (size_t i = open + 2; i < reply.size(); ++i)
+                if (reply[i] == '\'' && reply[i - 1] != ' ' &&
+                    (i + 1 == reply.size() || !std::isalpha(static_cast<unsigned char>(reply[i + 1]))) &&
+                    !std::isalpha(static_cast<unsigned char>(reply[i - 1])))
+                {
+                    close = i;
+                    break;
+                }
+            reply[open] = '"';
+            if (close != std::string::npos)
+                reply[close] = '"';
+            else
+                reply += '"';
+        }
+    }
 
     std::string quotedSpeech, quotedAction;
     if (TakeQuotedReply(reply, botName, quotedSpeech, quotedAction))
