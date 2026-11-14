@@ -736,7 +736,8 @@ namespace
         action = SeparateActionSentences(action);
         // "You look singed" written as an action is how the model narrates for the reader; as an emote it reads
         // "<Name> looks at you ...". Leave anything else as it is.
-        while (!action.empty() && (action.back() == '.' || action.back() == ' '))
+        while (!action.empty() && (action.back() == '.' || action.back() == ' ' || action.back() == ',' ||
+                                   action.back() == ';' || action.back() == ':' || action.back() == '-'))
             action.pop_back();
         if (!action.empty())
         {
@@ -1256,6 +1257,38 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
         {
             reply.clear();
             return action;
+        }
+    }
+
+    // An action with no marker at all, "Nods slowly, sure Baine.": an English stage verb, a few words, then the
+    // speech after the first comma or stop. Without this the whole line went out as /say.
+    if (reply.find('"') == std::string::npos && reply.find('*') == std::string::npos)
+    {
+        const std::string t = TrimCopy(reply);
+        const size_t space = t.find(' ');
+        const std::string first = Lower(t.substr(0, space));
+        const bool english = first.size() > 3 &&
+            (first.back() == 's' || (first.size() > 4 && first.compare(first.size() - 2, 2, "ed") == 0) ||
+             first == "shook" || first == "stood" || first == "sat");
+        const size_t cut = t.find_first_of(",.;!?");
+        std::string second = space == std::string::npos ? std::string() : Lower(t.substr(space + 1, t.find(' ', space + 1) - space - 1));
+        while (!second.empty() && !std::isalpha(static_cast<unsigned char>(second.back())))
+            second.pop_back();
+        if (english && IsStageVerb(first) && cut != std::string::npos && cut <= 60 &&
+            second != "like" && second != "out" && second != "to" && second != "as")
+        {
+            const std::string act = t.substr(0, cut);
+            std::string rest = TrimCopy(t.substr(cut + 1));
+            if (!rest.empty() && std::count(act.begin(), act.end(), ' ') <= 5)
+            {
+                const std::string third = ThirdPerson(act, botName);
+                if (!third.empty())
+                {
+                    actions = third;
+                    rest[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(rest[0])));
+                    reply = rest;
+                }
+            }
         }
     }
 
