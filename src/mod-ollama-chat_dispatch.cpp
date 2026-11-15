@@ -355,7 +355,7 @@ namespace
         if (!action.empty())
         {
             action = Roleplay_FilterMetaTerms(action);
-            if (Coa_LooksLikeEcho(action, prompt))
+            if (Coa_LooksLikeEcho(action, prompt) || Coa_LooksEmpty(action))
                 action.clear();
         }
 
@@ -376,10 +376,10 @@ namespace
         }
 
         // The model answering with its own instructions (Conquest of Azeroth edition).
-        if (!text.empty() && Coa_LooksLikeEcho(text, prompt))
+        if (!text.empty() && (Coa_LooksLikeEcho(text, prompt) || Coa_LooksEmpty(text)))
         {
             if (g_DebugEnabled)
-                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply rejected as an echo of its prompt: '{}'",
+                LOG_INFO("module.ollamachat", "[Ollama Chat] Bot {} reply rejected as an echo of its prompt or an empty line: '{}'",
                          task.request.botName, text);
             text.clear();
         }

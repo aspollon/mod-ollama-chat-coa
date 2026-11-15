@@ -321,6 +321,11 @@ namespace
             "never mention servers", "authentic wow tone",
             "never act like a narrator", "these instructions", "the instructions", "as an ai", "language model",
             "respond using", "use real wow slang", "no quotes, markdown", "your reply:", "gesture tag",
+            // A small model planning out loud, in its own words.
+            "how to respond", "how should i respond", "remember:", "important:", "writing as", "respond as",
+            "every line must", "never mention game", "without name at front", "start every sentence",
+            "the character must", "the reply should", "one short line about", "in double quotes", "between asterisks",
+            "third person, no name", "speak formally",
         };
         return markers;
     }
@@ -383,9 +388,21 @@ bool Coa_LooksLikeEcho(const std::string& reply, const std::string& prompt)
         if (lower.find(marker) != std::string::npos)
             return true;
 
+    // Words about writing, not about Azeroth: three different ones are a plan, not speech.
+    static const std::unordered_set<std::string> craft = {
+        "asterisks", "quotes", "quote", "sentence", "sentences", "respond", "response", "reply", "verb", "cadence",
+        "archaic", "instructions", "prompt", "roleplay", "narrator", "dialogue", "tone", "persona", "formal",
+    };
+    const std::vector<std::string> words = Words(reply);
+    std::unordered_set<std::string> craftSeen;
+    for (const std::string& w : words)
+        if (craft.count(w))
+            craftSeen.insert(w);
+    if (craftSeen.size() >= 3)
+        return true;
+
     // Runs of six words the reply shares with the prompt. One can be the player's own words quoted back; two or more
     // means the model is reciting what it was given.
-    const std::vector<std::string> words = Words(reply);
     if (words.size() < 6)
         return false;
     const std::vector<std::string> source = Words(prompt);
@@ -407,6 +424,18 @@ bool Coa_LooksLikeEcho(const std::string& reply, const std::string& prompt)
             return true;
     }
     return false;
+}
+
+bool Coa_LooksEmpty(const std::string& reply)
+{
+    const std::vector<std::string> words = Words(reply);
+    if (words.empty() || words.size() > 8)
+        return false;
+    // "Thrown" and "Throw" are one word here: the first four letters.
+    std::unordered_set<std::string> stems;
+    for (const std::string& w : words)
+        stems.insert(w.substr(0, 4));
+    return stems.size() <= 3 && stems.size() * 10 <= words.size() * 6;
 }
 
 // ---------------------------------------------------------------------------

@@ -27,6 +27,8 @@ std::string Coa_ClassVoice(uint8_t cls);
 // The model sometimes answers with its own instructions instead of a line of speech. True when the reply carries
 // phrases of the instructions, or several longer word runs of the prompt it was given.
 bool Coa_LooksLikeEcho(const std::string& reply, const std::string& prompt);
+// A line with nothing in it: a short reply that only repeats one or two words ("Thrown Throw Thrown.").
+bool Coa_LooksEmpty(const std::string& reply);
 
 // Where in the message this character is named, or npos. People do not type names the way the game stores them:
 // "klaus" for Klausdieter, "klaus dieter", "Klaudieter". Counted are the whole name, a beginning of it of at least
