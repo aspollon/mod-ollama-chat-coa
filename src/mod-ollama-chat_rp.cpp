@@ -163,8 +163,8 @@ namespace
         std::transform(low.begin(), low.end(), low.begin(), [](unsigned char c) { return std::tolower(c); });
         static char const* const marks[] = {
             "short epithet", "at most six words", "a few words", "where they come from", "two or three sentences",
-            "four to six sentences", "one sentence", "what they are doing", "let's think", "let me ", "important:",
-            "steps for", "actually,", "we want", "idea:", "note:", "the title must", "fits being a", "<think",
+            "four to six sentences", "one sentence, what", "what they are doing", "let's think", "let me think",
+            "steps for the", "the title must", "fits being a", "<think",
         };
         for (char const* m : marks)
             if (low.find(m) != std::string::npos)
@@ -240,7 +240,7 @@ namespace
             prompt += "Their temperament: " + personality + " ";
         prompt += "Invent a believable life that fits their people, their calling and their temperament. Nothing about game "
                   "mechanics, levels or being a bot, and do not describe their looks. Answer with exactly these six lines "
-                  "and nothing else:\n"
+                  "and nothing else, each line starting with its label in capitals and a colon, followed by your text:\n"
                   "TITLE: a short epithet or title, at most six words, without the name\n"
                   "AGE: a few words\n"
                   "HOME: where they come from\n"
@@ -269,23 +269,32 @@ namespace
                 std::map<std::string, std::string> labels = {
                     { "TITLE:", "TI" }, { "AGE:", "AG" }, { "HOME:", "HO" }, { "PERSONALITY:", "PE" }, { "HISTORY:", "HI" }, { "CURRENTLY:", "CU" } };
                 std::string text = api.text, current;
+                std::vector<std::string> plain;     // every non-empty line, for a model that leaves the labels out
                 size_t pos = 0;
                 while (pos <= text.size())
                 {
                     size_t nl = text.find('\n', pos);
                     std::string line = text.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
                     pos = nl == std::string::npos ? text.size() + 1 : nl + 1;
+                    while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+                        line.pop_back();
                     size_t a = line.find_first_not_of(" *-#");
                     if (a == std::string::npos)
                         continue;
                     line = line.substr(a);
+                    plain.push_back(line);
+                    // "**TITLE**: ..." and "**Title:** ..." are labels too.
+                    std::string bare;
+                    for (char ch : line)
+                        if (ch != '*')
+                            bare += ch;
                     bool label = false;
                     for (auto const& [l, code] : labels)
                     {
-                        if (line.size() >= l.size() && SameStart(line, l))
+                        if (bare.size() >= l.size() && SameStart(bare, l))
                         {
                             current = code;
-                            std::string v = line.substr(l.size());
+                            std::string v = bare.substr(l.size());
                             size_t b = v.find_first_not_of(" *");
                             d.sheet.f[code] = b == std::string::npos ? std::string() : v.substr(b);
                             label = true;
@@ -294,6 +303,13 @@ namespace
                     }
                     if (!label && !current.empty())      // a field that runs over several lines
                         d.sheet.f[current] += " " + line;
+                }
+                // Six lines in the asked order without their labels (gemma4): taken by position.
+                if (d.sheet.f.empty() && plain.size() == 6)
+                {
+                    char const* const order[] = { "TI", "AG", "HO", "PE", "HI", "CU" };
+                    for (size_t i = 0; i < 6; ++i)
+                        d.sheet.f[order[i]] = plain[i];
                 }
                 for (auto& [code, v] : d.sheet.f)
                 {
