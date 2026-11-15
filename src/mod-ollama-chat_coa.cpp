@@ -1265,6 +1265,60 @@ std::string Coa_TakeActionEmote(std::string& reply, const std::string& botName)
         reply.erase(open, close == std::string::npos ? std::string::npos : close + 8 - open);
     }
 
+    // "/em/crossing arms, leaning back, I'm doin' fine, mon": a model that took the word "/em" from an older prompt
+    // writes the command into the quotes. The leading -ing and body clauses become *the action*, the rest is speech.
+    for (const char* cmd : { "/em/", "/em ", "/em:", "/me ", "/me/", "/e " })
+    {
+        size_t at = reply.find(cmd);
+        if (at == std::string::npos)
+            continue;
+        const bool quoted = at > 0 && reply[at - 1] == '"';
+        size_t start = at + std::strlen(cmd);
+        size_t end = quoted ? reply.find('"', start) : std::string::npos;
+        std::string body = reply.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        auto actionLike = [](const std::string& seg)
+        {
+            std::string first;
+            for (char ch : seg)
+            {
+                if (ch == ' ')
+                    break;
+                first += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            static const std::unordered_set<std::string> body = { "eyes", "voice", "teeth", "arms", "hands", "head",
+                                                                   "gaze", "ears", "tusks", "shoulders", "his", "her",
+                                                                   "their", "lips", "fingers" };
+            if (seg.rfind("as if", 0) == 0 || seg.rfind("as though", 0) == 0)
+                return true;
+            return body.count(first) || (first.size() > 4 && first.compare(first.size() - 3, 3, "ing") == 0);
+        };
+        std::string action, speech;
+        size_t pos = 0;
+        while (pos < body.size())
+        {
+            size_t comma = body.find(", ", pos);
+            std::string seg = body.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+            if (!actionLike(seg))
+            {
+                speech = body.substr(pos);
+                break;
+            }
+            action += (action.empty() ? "" : ", ") + seg;
+            pos = comma == std::string::npos ? body.size() : comma + 2;
+        }
+        std::string rebuilt;
+        if (!action.empty())
+            rebuilt += "*" + action + "* ";
+        if (!speech.empty())
+        {
+            speech[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(speech[0])));
+            rebuilt += "\"" + speech + "\"";
+        }
+        reply = reply.substr(0, quoted ? at - 1 : at) + rebuilt +
+                (end == std::string::npos ? std::string() : reply.substr(end + 1));
+        break;
+    }
+
     std::string actions;
 
     // Speech in single quotes ("Bows his head. 'Then we stand together."): make them double quotes. An opening

@@ -2349,7 +2349,7 @@ BotPromptParts GenerateBotPromptParts(Player* bot, std::string playerMessage, Pl
     // whatever its wording, so this does not depend on a list of verbs.
     // No example action: small models copy any example into every line (the old one, grins wickedly, flooded chat).
     turn += " Write everything your character says inside double quotes. An action goes first, between asterisks, "
-            "in the third person and starting with a verb; it is sent as a text emote (/em) and is never spoken. "
+            "in the third person and starting with a verb; it is shown as an emote and is never spoken. "
             "Never repeat an action you used earlier in this conversation. Never put an action inside the quotes, never write stage directions like 'leans forward' or 'sighs' inside the spoken words, "
             "and never write speech tags like 'she says' or 'he asks' outside the quotes: the quotation marks alone "
             "show that the words are spoken. Finish every sentence you begin; do not trail off with '...'. Never "
