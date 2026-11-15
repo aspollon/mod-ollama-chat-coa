@@ -19,6 +19,7 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 
+#include <algorithm>
 #include <cctype>
 #include <map>
 #include <mutex>
@@ -153,6 +154,30 @@ namespace
             static_cast<uint32_t>(GameTime::GetGameTime().count()));
     }
 
+    // A field the model filled with the prompt's own wording or its reasoning ("Let's think about: ...").
+    bool BrokenField(std::string const& v)
+    {
+        std::string low = v;
+        std::transform(low.begin(), low.end(), low.begin(), [](unsigned char c) { return std::tolower(c); });
+        static char const* const marks[] = {
+            "short epithet", "at most six words", "a few words", "where they come from", "two or three sentences",
+            "four to six sentences", "one sentence", "what they are doing", "let's think", "let me ", "important:",
+            "steps for", "actually,", "we want", "idea:", "note:", "the title must", "fits being a", "<think",
+        };
+        for (char const* m : marks)
+            if (low.find(m) != std::string::npos)
+                return true;
+        return false;
+    }
+
+    bool BrokenSheet(Sheet const& s)
+    {
+        for (auto const& [code, v] : s.f)
+            if (code != "NA" && BrokenField(v))
+                return true;
+        return false;
+    }
+
     void Load()
     {
         g_loaded = true;
@@ -168,6 +193,12 @@ namespace
             s.bot = f[1].Get<uint8_t>() != 0;
             for (int i = 0; i < 8; ++i)
                 s.f[codes[i]] = f[2 + i].Get<std::string>();
+            // A bot sheet written with the model's reasoning in it is written again; players' own sheets stay.
+            if (s.bot && BrokenSheet(s))
+            {
+                CharacterDatabase.Execute("DELETE FROM mod_ollama_chat_rp WHERE guid = {}", f[0].Get<uint64_t>());
+                g_sheets.erase(f[0].Get<uint64_t>());
+            }
         } while (r->NextRow());
         LOG_INFO("module.ollamachat", "[Ollama Chat] {} roleplay sheets loaded.", g_sheets.size());
     }
@@ -220,9 +251,14 @@ namespace
         g_pending.insert(guid);
         bool const queued = OllamaDispatch_SubmitJob([guid, prompt]()
         {
-            OllamaApiResult api = QueryOllama(prompt, OllamaRequestKind::Background, 700);
             Done d{ guid, false, {} };
-            if (api.ok)
+            // A small model sometimes answers with its plan; one more try before the sheet counts as failed.
+            for (int attempt = 0; attempt < 2 && !d.ok; ++attempt)
+            {
+            OllamaApiResult api = QueryOllama(prompt, OllamaRequestKind::Background, 700);
+            d.sheet.f.clear();
+            if (!api.ok)
+                break;
             {
                 std::map<std::string, std::string> labels = {
                     { "TITLE:", "TI" }, { "AGE:", "AG" }, { "HOME:", "HO" }, { "PERSONALITY:", "PE" }, { "HISTORY:", "HI" }, { "CURRENTLY:", "CU" } };
@@ -259,7 +295,9 @@ namespace
                         v.pop_back();
                     v = Cut(v, MaxOf(code));
                 }
-                d.ok = !d.sheet.f["TI"].empty() && !d.sheet.f["HI"].empty();
+                d.ok = !d.sheet.f["TI"].empty() && !d.sheet.f["HI"].empty() && !d.sheet.f["PE"].empty() &&
+                       !BrokenSheet(d.sheet);
+            }
             }
             d.sheet.bot = true;
             std::lock_guard<std::mutex> lock(g_doneMutex);
