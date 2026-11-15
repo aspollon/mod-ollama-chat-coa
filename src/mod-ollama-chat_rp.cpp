@@ -49,6 +49,8 @@ namespace
 
     std::unordered_map<uint64_t, Sheet> g_sheets;                       // world thread
     std::unordered_set<uint64_t> g_pending, g_dirty, g_failed;
+    std::unordered_map<uint64_t, uint64_t> g_pendingSince;              // guid -> g_clock when the sheet was asked for
+    uint64_t g_clock = 0;                                               // ms, world thread
     std::unordered_map<uint64_t, std::vector<uint64_t>> g_waiting;      // bot -> players who asked
     std::unordered_map<uint64_t, std::map<std::string, std::string>> g_upload;   // player -> field being sent
     bool g_loaded = false;
@@ -249,9 +251,13 @@ namespace
             prompt += "\nWrite the text after each label in " + g_language + "; keep the labels in English.";
 
         g_pending.insert(guid);
+        g_pendingSince[guid] = g_clock;
         bool const queued = OllamaDispatch_SubmitJob([guid, prompt]()
         {
             Done d{ guid, false, {} };
+            // Whatever happens in here, the world thread hears back; a lost answer used to stop all writing ahead.
+            try
+            {
             // A small model sometimes answers with its plan; one more try before the sheet counts as failed.
             for (int attempt = 0; attempt < 2 && !d.ok; ++attempt)
             {
@@ -299,6 +305,11 @@ namespace
                        !BrokenSheet(d.sheet);
             }
             }
+            }
+            catch (...)
+            {
+                d.ok = false;
+            }
             d.sheet.bot = true;
             std::lock_guard<std::mutex> lock(g_doneMutex);
             g_done.push_back(std::move(d));
@@ -306,6 +317,7 @@ namespace
         if (!queued)
         {
             g_pending.erase(guid);
+            g_pendingSince.erase(guid);
             for (uint64_t p : g_waiting[guid])
                 if (Player* pl = ObjectAccessor::FindPlayer(ObjectGuid(p)))
                     Send(pl, "s\t" + bot->GetName() + "\tbusy");
@@ -452,6 +464,7 @@ void Rp_Update(uint32_t diff)
     for (Done& d : done)
     {
         g_pending.erase(d.guid);
+        g_pendingSince.erase(d.guid);
         Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(d.guid));
         std::string const name = bot ? bot->GetName() : std::string();
         if (d.ok)
@@ -479,6 +492,27 @@ void Rp_Update(uint32_t diff)
         for (uint64_t g : g_dirty)
             Save(g);
         g_dirty.clear();
+    }
+
+    // A sheet still unanswered after ten minutes counts as failed (the model hung or the server dropped it), so it
+    // no longer blocks writing ahead; a late answer is still kept.
+    g_clock += diff;
+    for (auto it = g_pendingSince.begin(); it != g_pendingSince.end();)
+    {
+        if (g_clock - it->second < 600000)
+        {
+            ++it;
+            continue;
+        }
+        uint64_t const guid = it->first;
+        it = g_pendingSince.erase(it);
+        g_pending.erase(guid);
+        g_failed.insert(guid);
+        Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(guid));
+        for (uint64_t p : g_waiting[guid])
+            if (Player* pl = ObjectAccessor::FindPlayer(ObjectGuid(p)); pl && bot)
+                Send(pl, "s\t" + bot->GetName() + "\tfailed");
+        g_waiting.erase(guid);
     }
 
     g_hourTimer += diff;
