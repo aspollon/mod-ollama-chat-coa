@@ -13,6 +13,9 @@ class Player;
 void Rp_LoadConfig();
 void Rp_Update(uint32_t diff);
 std::string Rp_PromptSection(Player* bot, Player* player);
+// Forgets the sheets the language model wrote, for one bot by name or for all ("all"); they are written again when
+// asked for or near a player. Players' own sheets stay. Returns how many were removed.
+uint32_t Rp_ResetBotSheets(std::string const& name);
 
 class OllamaRpChat : public PlayerScript
 {

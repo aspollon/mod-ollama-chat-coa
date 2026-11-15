@@ -347,6 +347,13 @@ Reloads the module's configuration from `mod-ollama-chat.conf` without restartin
 - **Usage:** `.ollama reload`
 - **Console Equivalent:** `ollama reload`
 
+### `.ollama rpreset <bot_name|all>`
+Forgets the roleplay sheets the language model wrote for one bot, or for all bots with `all`, so they are written again
+(when a player opens the sheet, or for bots near players). Sheets players wrote themselves are kept. No bot reset needed.
+- **Security Level:** SEC_ADMINISTRATOR
+- **Usage:** `.ollama rpreset BotName` or `.ollama rpreset all`
+- **Console Equivalent:** `ollama rpreset <bot|all>`
+
 ### `.ollama personality get <bot_name>`
 Displays the current personality assigned to a bot.
 - **Security Level:** SEC_ADMINISTRATOR

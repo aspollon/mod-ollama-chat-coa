@@ -18,6 +18,7 @@ public:
     // Diagnostics. Half of what was wrong with this module was invisible
     // because there was no way to ask it what it thought it was doing.
     static bool HandleOllamaStatusCommand(ChatHandler* handler);
+    static bool HandleOllamaRpResetCommand(ChatHandler* handler, std::string name);
     static bool HandleOllamaTestCommand(ChatHandler* handler, Acore::ChatCommands::Tail prompt);
 };
 

@@ -7,6 +7,7 @@
 #include "mod-ollama-chat_governor.h"
 #include "mod-ollama-chat_response.h"
 #include "mod-ollama-chat_roleplay.h"
+#include "mod-ollama-chat_rp.h"
 #include "mod-ollama-chat-utilities.h"
 #include "Log.h"
 #include "DatabaseEnv.h"
@@ -39,6 +40,7 @@ ChatCommandTable OllamaChatConfigCommand::GetCommands() const
         { "reload",      HandleOllamaReloadCommand,  SEC_ADMINISTRATOR, Console::Yes },
         { "status",      HandleOllamaStatusCommand,  SEC_ADMINISTRATOR, Console::Yes },
         { "test",        HandleOllamaTestCommand,    SEC_ADMINISTRATOR, Console::Yes },
+        { "rpreset",     HandleOllamaRpResetCommand, SEC_ADMINISTRATOR, Console::Yes },
         { "personality", ollamaPersonalityCommandTable }
     };
 
@@ -48,6 +50,19 @@ ChatCommandTable OllamaChatConfigCommand::GetCommands() const
     };
 
     return commandTable;
+}
+
+// .ollama rpreset <bot name|all>: the bots' roleplay sheets are written anew, no bot reset needed.
+bool OllamaChatConfigCommand::HandleOllamaRpResetCommand(ChatHandler* handler, std::string name)
+{
+    uint32_t const removed = Rp_ResetBotSheets(name);
+    if (name == "all")
+        handler->SendSysMessage(fmt::format("OllamaChat: {} bot roleplay sheets removed; they are written again as needed.", removed));
+    else if (removed)
+        handler->SendSysMessage(fmt::format("OllamaChat: roleplay sheet of {} removed; it is written again when asked for.", name));
+    else
+        handler->SendSysMessage(fmt::format("OllamaChat: '{}' has no sheet written by the language model.", name));
+    return true;
 }
 
 bool OllamaChatConfigCommand::HandleOllamaReloadCommand(ChatHandler* handler)

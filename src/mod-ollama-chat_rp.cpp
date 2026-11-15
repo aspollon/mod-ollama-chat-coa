@@ -498,6 +498,46 @@ void Rp_Update(uint32_t diff)
     }
 }
 
+uint32_t Rp_ResetBotSheets(std::string const& name)
+{
+    if (!g_loaded)
+        Load();
+    uint32_t removed = 0;
+    if (name == "all")
+    {
+        for (auto it = g_sheets.begin(); it != g_sheets.end();)
+        {
+            if (it->second.bot)
+            {
+                g_dirty.erase(it->first);
+                it = g_sheets.erase(it);
+                ++removed;
+            }
+            else
+                ++it;
+        }
+        CharacterDatabase.Execute("DELETE FROM mod_ollama_chat_rp WHERE is_bot = 1");
+    }
+    else
+    {
+        Player* who = ObjectAccessor::FindPlayerByName(name, false);
+        uint64_t guid = who ? who->GetGUID().GetRawValue() : 0;
+        if (!guid)
+            if (CharacterCacheEntry const* c = sCharacterCache->GetCharacterCacheByName(name))
+                guid = c->Guid.GetRawValue();
+        auto it = guid ? g_sheets.find(guid) : g_sheets.end();
+        if (it != g_sheets.end() && it->second.bot)
+        {
+            g_dirty.erase(guid);
+            g_sheets.erase(it);
+            CharacterDatabase.Execute("DELETE FROM mod_ollama_chat_rp WHERE guid = {} AND is_bot = 1", guid);
+            removed = 1;
+        }
+    }
+    g_failed.clear();
+    return removed;
+}
+
 std::string Rp_PromptSection(Player* bot, Player* player)
 {
     if (!g_inChat || !bot)
