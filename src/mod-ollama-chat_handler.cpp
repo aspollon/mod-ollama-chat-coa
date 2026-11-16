@@ -1173,6 +1173,10 @@ static Player* OllamaFindFocusBot(Player* player, const std::vector<Player*>& ca
     return nullptr;
 }
 
+static void SubmitBotReply(Player* bot, Player* player, ChatChannelSourceLocal sourceLocal, std::string const& channelName,
+                           uint32_t channelId, uint8_t chainDepth, std::string const& scopeKey, std::string const& msg,
+                           bool senderIsBot, bool directAddress);
+
 void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32_t lang, std::string& msg, ChatChannelSourceLocal sourceLocal, Channel* channel, Player* receiver, uint8_t chainDepth)
 {
     if (player == nullptr) {
@@ -1829,38 +1833,60 @@ void PlayerBotChatHandler::ProcessChat(Player* player, uint32_t /*type*/, uint32
     }
     
     const uint64_t senderGuid = player->GetGUID().GetRawValue();
+    const std::string channelName = channel ? channel->GetName() : std::string();
 
     for (Player* bot : finalCandidates)
     {
         if (!bot)
             continue;
 
-        // Everything below runs on the world thread: prompt building reads
-        // live world state, and the governor decides before we spend an LLM
-        // call rather than after.
         // A line aimed at this bot is owed an answer, so it skips the pacing
         // cooldowns. The global messages-per-minute ceiling still applies.
         const bool directAddress =
             OllamaIsDirectAddress(bot, player, sourceLocal, trimmedMsg, senderIsBot, scopeKey);
 
+        // A bot without its roleplay sheet writes it first, so its answer already knows who it is.
+        if (!senderIsBot && directAddress)
+        {
+            const uint64_t botGuid = bot->GetGUID().GetRawValue();
+            if (Rp_SheetFirst(bot, [=]()
+                {
+                    Player* b = ObjectAccessor::FindConnectedPlayer(ObjectGuid(botGuid));
+                    Player* p = ObjectAccessor::FindConnectedPlayer(ObjectGuid(senderGuid));
+                    if (b && p && b->IsInWorld() && p->IsInWorld())
+                        SubmitBotReply(b, p, sourceLocal, channelName, channelId, chainDepth, scopeKey, msg, senderIsBot, directAddress);
+                }))
+                continue;
+        }
+        SubmitBotReply(bot, player, sourceLocal, channelName, channelId, chainDepth, scopeKey, msg, senderIsBot, directAddress);
+    }
+}
+
+// World thread: build this bot's prompt and hand it to the dispatcher.
+static void SubmitBotReply(Player* bot, Player* player, ChatChannelSourceLocal sourceLocal, std::string const& channelName,
+                           uint32_t channelId, uint8_t chainDepth, std::string const& scopeKey, std::string const& msg,
+                           bool senderIsBot, bool directAddress)
+{
+    const uint64_t senderGuid = player->GetGUID().GetRawValue();
+    {
         if (!Governor_CanSend(bot->GetGUID(), scopeKey, directAddress))
         {
             if (g_DebugEnabled)
                 LOG_INFO("module.ollamachat",
                          "[Ollama Chat] Bot {} skipped: cooldown or rate limit.", bot->GetName());
-            continue;
+            return;
         }
 
         BotPromptParts parts = GenerateBotPromptParts(bot, msg, player);
         if (parts.Full().empty())
-            continue;
+            return;
 
         OllamaChatRequest request;
         request.botGuid     = bot->GetGUID().GetRawValue();
         request.targetGuid  = senderGuid;
         request.source      = sourceLocal;
-        request.channelName = channel ? channel->GetName() : std::string();
-        request.channelId   = channel ? channel->GetChannelId() : 0;
+        request.channelName = channelName;
+        request.channelId   = channelId;
         request.chainDepth  = chainDepth;
         request.directAddress = directAddress;
         request.scopeKey    = scopeKey;

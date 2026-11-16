@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <unordered_map>
@@ -32,7 +33,8 @@ namespace
 {
     char const* const PREFIX = "AFKRP";
 
-    bool     g_enable = true, g_pregen = false, g_inChat = true;
+    bool     g_enable = true, g_pregen = false, g_inChat = true, g_sheetFirst = true;
+    uint32_t g_sheetFirstWait = 45;                                     // seconds
     float    g_range = 40.0f;
     uint32_t g_perHour = 20;
     std::string g_language;
@@ -57,6 +59,19 @@ namespace
     uint32_t g_tick = 0, g_flush = 0, g_hourTimer = 0, g_madeThisHour = 0;
 
     struct Done { uint64_t guid; bool ok; Sheet sheet; };
+    struct After { uint64_t deadline; std::function<void()> fn; };
+    std::unordered_map<uint64_t, std::vector<After>> g_after;            // bot -> answers waiting for its sheet
+
+    void RunAfter(uint64_t guid)
+    {
+        auto it = g_after.find(guid);
+        if (it == g_after.end())
+            return;
+        std::vector<After> list = std::move(it->second);
+        g_after.erase(it);
+        for (After& a : list)
+            a.fn();
+    }
     std::mutex g_doneMutex;
     std::vector<Done> g_done;                                           // worker -> world
 
@@ -338,6 +353,7 @@ namespace
                 if (Player* pl = ObjectAccessor::FindPlayer(ObjectGuid(p)))
                     Send(pl, "s\t" + bot->GetName() + "\tbusy");
             g_waiting.erase(guid);
+            RunAfter(guid);
         }
     }
 
@@ -464,6 +480,8 @@ void Rp_LoadConfig()
     g_range    = sConfigMgr->GetOption<float>("OllamaChat.RP.PregenerateRange", 40.0f);
     g_perHour  = sConfigMgr->GetOption<uint32_t>("OllamaChat.RP.PregeneratePerHour", 20);
     g_inChat   = sConfigMgr->GetOption<bool>("OllamaChat.RP.UseSheetsInChat", true);
+    g_sheetFirst = sConfigMgr->GetOption<bool>("OllamaChat.RP.SheetFirst", true);
+    g_sheetFirstWait = std::min<uint32_t>(300, sConfigMgr->GetOption<uint32_t>("OllamaChat.RP.SheetFirstWaitSeconds", 45));
     g_language = sConfigMgr->GetOption<std::string>("OllamaChat.RP.Language", "");
 }
 
@@ -499,6 +517,7 @@ void Rp_Update(uint32_t diff)
                     Send(pl, "s\t" + name + "\tfailed");
             }
         g_waiting.erase(d.guid);
+        RunAfter(d.guid);
     }
 
     g_flush += diff;
@@ -524,12 +543,25 @@ void Rp_Update(uint32_t diff)
         it = g_pendingSince.erase(it);
         g_pending.erase(guid);
         g_failed.insert(guid);
+        RunAfter(guid);
         Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(guid));
         for (uint64_t p : g_waiting[guid])
             if (Player* pl = ObjectAccessor::FindPlayer(ObjectGuid(p)); pl && bot)
                 Send(pl, "s\t" + bot->GetName() + "\tfailed");
         g_waiting.erase(guid);
     }
+
+    // Waited long enough: the bot answers without its sheet; the sheet is still written and kept.
+    std::vector<uint64_t> late;
+    for (auto& [guid, list] : g_after)
+        for (After const& a : list)
+            if (g_clock >= a.deadline)
+            {
+                late.push_back(guid);
+                break;
+            }
+    for (uint64_t guid : late)
+        RunAfter(guid);
 
     g_hourTimer += diff;
     if (g_hourTimer >= 3600000)
@@ -586,6 +618,21 @@ uint32_t Rp_ResetBotSheets(std::string const& name)
     }
     g_failed.clear();
     return removed;
+}
+
+bool Rp_SheetFirst(Player* bot, std::function<void()> then)
+{
+    if (!g_enable || !g_inChat || !g_sheetFirst || !g_sheetFirstWait || !bot || !OllamaIsBotPlayer(bot))
+        return false;
+    if (!g_loaded)
+        Load();
+    uint64_t const guid = bot->GetGUID().GetRawValue();
+    if (g_sheets.count(guid) || g_failed.count(guid))
+        return false;
+    g_after[guid].push_back({ g_clock + uint64_t(g_sheetFirstWait) * 1000, std::move(then) });
+    if (!g_pending.count(guid))
+        Request(bot, 0);
+    return true;
 }
 
 std::string Rp_PromptSection(Player* bot, Player* player)

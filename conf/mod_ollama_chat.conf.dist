@@ -1974,6 +1974,19 @@ OllamaChat.RP.PregeneratePerHour = 20
 #     Default:     1
 OllamaChat.RP.UseSheetsInChat = 1
 
+# OllamaChat.RP.SheetFirst
+#     Description: A bot spoken to directly that has no roleplay sheet yet writes it first and answers after that,
+#                  so its first answer already knows its own past and temperament. The first answer of such a bot
+#                  comes a little later. 0: it answers at once and writes the sheet only when asked.
+#     Default:     1
+OllamaChat.RP.SheetFirst = 1
+
+# OllamaChat.RP.SheetFirstWaitSeconds
+#     Description: How long the answer waits for the sheet at most; after that the bot answers without it (the sheet
+#                  is still written and used from then on). 0 works like SheetFirst = 0.
+#     Default:     45
+OllamaChat.RP.SheetFirstWaitSeconds = 45
+
 # OllamaChat.RP.Language
 #     Description: The language bots' sheets are written in, for example "German". Empty: English.
 #     Default:     ""

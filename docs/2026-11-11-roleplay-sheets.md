@@ -38,3 +38,11 @@ Fields: NA name, TI title, AG age, HO home, AP looks, PE manner, HI history, CU 
 Bots' memories are keyed by guid; the cleanup that drops them when a guid changes hands compared whole names, so a
 surname change (AiPlayerbot.CoaBotSurname) would have wiped them.
 It compares first names now, and `mod_ollama_chat_identity.name` holds the 25 characters of a two-word name.
+
+## Sheet first (2026-11-16)
+
+`Rp_SheetFirst`: a line aimed at a bot (direct address, from a real person) that has no sheet requests the sheet and
+parks the reply (`SubmitBotReply` in `mod-ollama-chat_handler.cpp`, captured by guids) until the sheet is written or
+failed, or `OllamaChat.RP.SheetFirstWaitSeconds` (45) passed. The prompt is built only then, so the first answer
+knows who the bot is. Chris asked for it: without pre-written sheets a bot otherwise answers its first lines without
+a past. `OllamaChat.RP.SheetFirst = 0` answers at once.
